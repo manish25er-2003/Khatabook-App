@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function isBusinessMember(businessId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid));
+    }
+
+    function hasRole(businessId, allowedRoles) {
+      return isBusinessMember(businessId) &&
+        get(/databases/$(database)/documents/businesses/$(businessId)/members/$(request.auth.uid)).data.role in allowedRoles;
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    match /businesses/{businessId} {
+      allow read: if isBusinessMember(businessId);
+      allow create: if isSignedIn();
+      allow update, delete: if hasRole(businessId, ['owner', 'admin']);
+    }
+
+    match /businesses/{businessId}/members/{memberId} {
+      allow read: if isBusinessMember(businessId);
+      allow create, update: if hasRole(businessId, ['owner', 'admin']) || request.auth.uid == memberId;
+      allow delete: if hasRole(businessId, ['owner']);
+    }
+
+    match /businesses/{businessId}/customers/{customerId} {
+      allow read: if isBusinessMember(businessId);
+      allow create, update: if hasRole(businessId, ['owner', 'admin', 'staff']);
+      allow delete: if hasRole(businessId, ['owner', 'admin']);
+    }
+
+    match /businesses/{businessId}/customers/{customerId}/transactions/{transactionId} {
+      allow read: if isBusinessMember(businessId);
+      allow create, update: if hasRole(businessId, ['owner', 'admin', 'staff']);
+      allow delete: if hasRole(businessId, ['owner', 'admin']);
+    }
+
+    match /businesses/{businessId}/suppliers/{supplierId} {
+      allow read: if isBusinessMember(businessId);
+      allow create, update: if hasRole(businessId, ['owner', 'admin', 'staff']);
+      allow delete: if hasRole(businessId, ['owner', 'admin']);
+    }
+
+    match /businesses/{businessId}/suppliers/{supplierId}/transactions/{transactionId} {
+      allow read: if isBusinessMember(businessId);
+      allow create, update: if hasRole(businessId, ['owner', 'admin', 'staff']);
+      allow delete: if hasRole(businessId, ['owner', 'admin']);
+    }
+
+    match /businesses/{businessId}/reminders/{reminderId} {
+      allow read: if isBusinessMember(businessId);
+      allow create, update: if hasRole(businessId, ['owner', 'admin', 'staff']);
+      allow delete: if hasRole(businessId, ['owner', 'admin']);
+    }
+
+    match /businesses/{businessId}/notifications/{notificationId} {
+      allow read: if isBusinessMember(businessId) && resource.data.userId == request.auth.uid;
+      allow create, update: if isBusinessMember(businessId);
+      allow delete: if hasRole(businessId, ['owner', 'admin']);
+    }
+
+    match /businesses/{businessId}/settings/{document=**} {
+      allow read: if isBusinessMember(businessId);
+      allow write: if hasRole(businessId, ['owner', 'admin']);
+    }
+  }
+}

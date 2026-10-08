@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Khatabook app logo">
+  <rect width="128" height="128" rx="28" fill="#16A085"/>
+  <rect x="30" y="26" width="68" height="76" rx="18" fill="#E8F8F5"/>
+  <path d="M48 58h32M48 74h22M48 90h18" stroke="#0E7C66" stroke-width="8" stroke-linecap="round"/>
+  <path d="M72 44l18 18-18 18" fill="none" stroke="#F4B942" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
