@@ -35,7 +35,7 @@ button {
   flex-direction: column;
   justify-content: center;
   padding: 0;
-  background: #000000;
+  background: linear-gradient(180deg, #081311 0%, #0f1d1d 100%);
 }
 
 .studio-topbar {
@@ -685,10 +685,10 @@ button {
   min-height: 490px;
   width: 100%;
   padding: 10px 14px 14px;
-  border-radius: 0;
+  border-radius: 28px 28px 0 0;
   background: linear-gradient(180deg, #f5f7f6 0%, #edf4f2 100%);
   border: none;
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .splash-exact-screen {
@@ -3641,6 +3641,7 @@ button {
     padding: 0;
     margin: 0;
     padding-bottom: 96px;
+    background: linear-gradient(180deg, #050d0d 0%, #0d1d1b 100%);
   }
 
   .auth-card {
@@ -3662,11 +3663,14 @@ button {
     width: 100%;
     min-width: 0;
     border-radius: 0;
+    background: linear-gradient(180deg, #050d0d 0%, #0d1d1b 100%);
   }
 
   .mobile-app-screen {
     min-height: 100vh;
-    border-radius: 0;
+    border-radius: 24px 24px 0 0;
+    margin: 0 auto;
+    width: min(100%, 420px);
   }
 }
 
