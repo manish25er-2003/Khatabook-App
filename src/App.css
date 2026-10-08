@@ -8,14 +8,13 @@ html, body, #root {
   width: 100%;
   font-family: Inter, 'Segoe UI', sans-serif;
   background: #000000;
+  overflow-x: hidden;
 }
 
 body {
   min-height: 100vh;
   color: #132b2a;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  display: block;
 }
 
 button,
@@ -30,7 +29,8 @@ button {
 
 .app-shell {
   min-height: 100vh;
-  width: min(100%, 390px);
+  width: 100%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -668,9 +668,10 @@ button {
 }
 
 .mobile-app-frame {
-  width: min(100%, 320px);
+  width: 100%;
+  max-width: 100%;
   padding: 0;
-  border-radius: 14px;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
@@ -684,7 +685,7 @@ button {
   min-height: 490px;
   width: 100%;
   padding: 10px 14px 14px;
-  border-radius: 14px;
+  border-radius: 0;
   background: linear-gradient(180deg, #f5f7f6 0%, #edf4f2 100%);
   border: none;
   box-shadow: none;
@@ -3635,11 +3636,11 @@ button {
 
 @media (max-width: 640px) {
   .app-shell {
-    width: min(100vw - 12px, 420px);
-    padding-left: 10px;
-    padding-right: 10px;
+    width: 100vw;
+    max-width: 100vw;
+    padding: 0;
+    margin: 0;
     padding-bottom: 96px;
-    margin: 0 auto;
   }
 
   .auth-card {
@@ -3649,12 +3650,23 @@ button {
   }
 
   .screen {
-    min-height: 520px;
+    min-height: 100vh;
   }
 
   .phone-frame {
     width: 280px;
     min-width: 280px;
+  }
+
+  .mobile-app-frame {
+    width: 100%;
+    min-width: 0;
+    border-radius: 0;
+  }
+
+  .mobile-app-screen {
+    min-height: 100vh;
+    border-radius: 0;
   }
 }
 
