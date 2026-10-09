@@ -38,7 +38,7 @@ import {
 } from 'lucide-react'
 import { doc, setDoc } from 'firebase/firestore'
 import './App.css'
-import developerProfileImage from './assets/developer/manish-kumar.jpg'
+import developerProfileImage from './assets/developer/manish-kumar.png'
 import { firebaseDb, isFirebaseConfigured } from './firebase/config'
 import { AuthProvider, useAuthContext } from './contexts/AuthContext'
 import { signInUser, signOutUser, signUpUser } from './services/authService'
@@ -1417,12 +1417,6 @@ function DeveloperIntroScreen({
 
           {isFirstSlide && (
             <div className="first-intro-hero">
-              <div className="first-intro-bookmark" aria-hidden="true">
-                <div className="brand-book intro-brand-book">
-                  <span className="book-spine" />
-                  <span className="book-pages" />
-                </div>
-              </div>
               <div className="developer-intro-brand-badge">KhataPro</div>
               <p className="developer-intro-splash-copy">Digital Business Management</p>
               <div className="first-intro-meta">
