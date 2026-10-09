@@ -6,27 +6,35 @@ import {
   ArrowUpRight,
   Bell,
   Building2,
+  Check,
   ChevronRight,
   CircleHelp,
+  Code2,
   CreditCard,
   FileText,
   Globe,
   Info,
+  Languages,
   LayoutDashboard,
+  Lock,
   LogOut,
   Mail,
   MapPin,
+  Palette,
   Phone,
   Plus,
   Search,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   Star,
   TrendingUp,
   User,
   UserPlus,
+  UserRound,
   Users,
   Wallet,
+  X,
 } from 'lucide-react'
 import { doc, setDoc } from 'firebase/firestore'
 import './App.css'
@@ -36,6 +44,7 @@ import { AuthProvider, useAuthContext } from './contexts/AuthContext'
 import { signInUser, signOutUser, signUpUser } from './services/authService'
 import { createBusiness, getBusiness } from './services/businessService'
 import { createCustomer, getCustomers } from './services/customerService'
+import { storageService } from './services/storageService'
 import { createTransaction, getCustomerTransactions } from './services/transactionService'
 import {
   checkLoanEligibility,
@@ -72,6 +81,7 @@ const emptyTransactionForm = {
 
 const OWNER_UPI_ID = '7087338600@ybl'
 const PAYMENT_STATUSES = ['pending', 'initiated', 'success', 'failed', 'cancelled', 'verified'] as const
+const DEFAULT_PROFILE_NAME = 'Er. Manish Kumar Yadav'
 
 type PaymentStatus = (typeof PAYMENT_STATUSES)[number]
 
@@ -108,10 +118,7 @@ function AppContent() {
   const { currentUser, profile, loading, isAuthenticated } = useAuthContext()
   const isDemoMode = !isFirebaseConfigured
   const [demoSession, setDemoSession] = useState(false)
-  const [screen, setScreen] = useState<'developerIntro' | 'splash' | 'register' | 'login' | 'onboarding' | 'dashboard' | 'customers' | 'khata' | 'addCustomer' | 'addTransaction' | 'paymentSuccess' | 'suppliers' | 'reports' | 'profile' | 'settings' | 'about' | 'developerProfile' | 'loans' | 'loanDetail' | 'loanApplication'>(() => {
-    if (typeof window === 'undefined') return 'splash'
-    return window.localStorage.getItem('khatapro-has-seen-developer-intro') === 'true' ? 'splash' : 'developerIntro'
-  })
+  const [screen, setScreen] = useState<'developerIntro' | 'splash' | 'register' | 'login' | 'onboarding' | 'dashboard' | 'customers' | 'khata' | 'addCustomer' | 'addTransaction' | 'paymentSuccess' | 'suppliers' | 'reports' | 'profile' | 'settings' | 'about' | 'developerProfile' | 'loans' | 'loanDetail' | 'loanApplication'>(() => 'developerIntro')
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
   const [authForm, setAuthForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' })
   const [authError, setAuthError] = useState('')
@@ -134,7 +141,20 @@ function AppContent() {
   const [profileForm, setProfileForm] = useState(() => {
     if (typeof window === 'undefined') return demoProfile
     const raw = window.localStorage.getItem('khatapro-profile')
-    return raw ? (JSON.parse(raw) as typeof demoProfile) : demoProfile
+    if (!raw) return demoProfile
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<typeof demoProfile>
+      const normalizedName = parsed.name && !['Aarav Mehta', 'Aarav Traders'].includes(parsed.name) ? parsed.name : DEFAULT_PROFILE_NAME
+      return {
+        ...demoProfile,
+        ...parsed,
+        name: normalizedName,
+        photoURL: parsed.photoURL && !parsed.photoURL.includes('images.unsplash.com') ? parsed.photoURL : developerProfileImage,
+      }
+    } catch {
+      return demoProfile
+    }
   })
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(demoCustomers[0]?.id ?? null)
   const [customerForm, setCustomerForm] = useState(emptyCustomerForm)
@@ -160,6 +180,28 @@ function AppContent() {
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null)
   const [showInstallButton, setShowInstallButton] = useState(false)
   const [isStandaloneMode, setIsStandaloneMode] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [activeSettingsSection, setActiveSettingsSection] = useState<'profile' | 'developer' | 'appearance' | 'language' | 'notifications' | 'privacy' | 'preferences' | 'support' | 'about' | 'logout'>('profile')
+  const [businessLogoPreview, setBusinessLogoPreview] = useState('')
+  const [businessLogoFile, setBusinessLogoFile] = useState<File | null>(null)
+  const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>(() => {
+    if (typeof window === 'undefined') return 'system'
+    return (window.localStorage.getItem('khatapro-theme') as 'light' | 'dark' | 'system') || 'system'
+  })
+  const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'hi'>(() => {
+    if (typeof window === 'undefined') return 'en'
+    return (window.localStorage.getItem('khatapro-language') as 'en' | 'hi') || 'en'
+  })
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
+    if (typeof window === 'undefined') return true
+    const raw = window.localStorage.getItem('khatapro-notifications')
+    return raw === null ? true : raw === 'true'
+  })
+  const [compactLayout, setCompactLayout] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem('khatapro-layout') === 'compact'
+  })
+  const [settingsFeedback, setSettingsFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null)
 
   const activeCustomer = useMemo(
     () => customers.find((customer) => customer.id === selectedCustomerId) ?? customers[0] ?? null,
@@ -206,12 +248,71 @@ function AppContent() {
   }, [toast])
 
   useEffect(() => {
+    if (!settingsFeedback) return
+    const timeout = window.setTimeout(() => setSettingsFeedback(null), 2400)
+    return () => window.clearTimeout(timeout)
+  }, [settingsFeedback])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const hasStaleName = profileForm.name === 'Aarav Mehta' || profileForm.name === 'Aarav Traders'
+    if (!profileForm.photoURL || profileForm.photoURL.includes('images.unsplash.com') || hasStaleName) {
+      setProfileForm((prev) => ({
+        ...prev,
+        photoURL: developerProfileImage,
+        name: hasStaleName ? DEFAULT_PROFILE_NAME : prev.name || DEFAULT_PROFILE_NAME,
+      }))
+    }
+  }, [profileForm.photoURL, profileForm.name])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem('khatapro-theme', themeMode)
+    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    const isDark = themeMode === 'system' ? systemDark : themeMode === 'dark'
+    document.documentElement.dataset.theme = isDark ? 'dark' : 'light'
+  }, [themeMode])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem('khatapro-language', selectedLanguage)
+  }, [selectedLanguage])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem('khatapro-notifications', String(notificationsEnabled))
+  }, [notificationsEnabled])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem('khatapro-layout', compactLayout ? 'compact' : 'comfortable')
+    document.body.classList.toggle('compact-layout', compactLayout)
+  }, [compactLayout])
+
+  useEffect(() => {
     if (screen === 'developerIntro') {
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('khatapro-has-seen-developer-intro', 'true')
       }
     }
   }, [screen])
+
+  useEffect(() => {
+    if (!settingsOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSettingsOpen(false)
+    }
+
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = ''
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [settingsOpen])
 
   useEffect(() => {
     if (!activeCustomer) return
@@ -486,6 +587,15 @@ function AppContent() {
     event.preventDefault()
 
     if (isDemoMode) {
+      if (authMode === 'register') {
+        setDemoSession(false)
+        setAuthForm({ name: '', email: '', phone: '', password: '', confirmPassword: '' })
+        setAuthMode('login')
+        setToast({ type: 'success', message: '✓ Account created successfully. Please sign in and set up your business.' })
+        setScreen('login')
+        return
+      }
+
       setDemoSession(true)
       setBusiness(demoBusiness)
       setCustomers(demoCustomers)
@@ -511,53 +621,37 @@ function AppContent() {
 
     try {
       if (authMode === 'register') {
-        const user = await signUpUser({
+        await signUpUser({
           name: authForm.name,
           email: authForm.email,
           phone: authForm.phone,
           password: authForm.password,
         })
 
-        const defaultBusiness = await createBusiness({
-          ownerId: user.uid,
-          name: authForm.name ? `${authForm.name.split(' ')[0]}'s Business` : 'My Business',
-          category: 'Retail',
-          address: '',
-          city: '',
-          state: '',
-          country: 'India',
-          currency: 'INR',
-        })
+        setProfileForm((prev) => ({
+          ...prev,
+          name: authForm.name || prev.name,
+          email: authForm.email || prev.email,
+          phone: authForm.phone || prev.phone,
+          photoURL: prev.photoURL || developerProfileImage,
+        }))
 
-        if (firebaseDb) {
-          await setDoc(
-            doc(firebaseDb, 'users', user.uid),
-            {
-              uid: user.uid,
-              name: authForm.name,
-              email: authForm.email,
-              phone: authForm.phone,
-              businessId: defaultBusiness.id,
-              onboardingCompleted: true,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            },
-            { merge: true },
-          )
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('khatapro-profile', JSON.stringify({
+            ...demoProfile,
+            name: authForm.name || demoProfile.name,
+            email: authForm.email || demoProfile.email,
+            phone: authForm.phone || demoProfile.phone,
+            photoURL: developerProfileImage,
+          }))
         }
 
-        const createdProfile = {
-          uid: 'demo-user',
-          name: authForm.name,
-          email: authForm.email,
-          phone: authForm.phone,
-          businessId: demoBusiness.id,
-          onboardingCompleted: true,
-        }
+        await signOutUser()
 
-        setProfileForm((prev) => ({ ...prev, ...createdProfile }))
-        setToast({ type: 'success', message: `✓ Account created successfully. Welcome to KhataPro, ${authForm.name}!` })
-        setScreen('dashboard')
+        setAuthForm({ name: '', email: '', phone: '', password: '', confirmPassword: '' })
+        setAuthMode('login')
+        setToast({ type: 'success', message: `✓ Account created successfully. Please sign in and set up your business.` })
+        setScreen('login')
       } else {
         await signInUser(authForm.email, authForm.password)
         setScreen('dashboard')
@@ -587,6 +681,14 @@ function AppContent() {
     }
 
     try {
+      let businessLogoUrl = business?.logoUrl || ''
+
+      if (businessLogoFile) {
+        const fileExt = (businessLogoFile.name.split('.').pop() || 'png').toLowerCase()
+        const storagePath = `business-logos/${currentUser.uid}/${Date.now()}.${fileExt}`
+        businessLogoUrl = await storageService.uploadFile(businessLogoFile, storagePath)
+      }
+
       const createdBusiness = await createBusiness({
         ownerId: currentUser.uid,
         name: businessName,
@@ -596,6 +698,7 @@ function AppContent() {
         state,
         country: 'India',
         currency,
+        logoUrl: businessLogoUrl || undefined,
       })
 
       if (firebaseDb) {
@@ -611,7 +714,10 @@ function AppContent() {
         )
       }
 
-      setBusiness(createdBusiness)
+      const nextBusiness = { ...createdBusiness, logoUrl: businessLogoUrl || undefined }
+      setBusiness(nextBusiness)
+      setBusinessLogoPreview(businessLogoUrl || '')
+      setBusinessLogoFile(null)
       setScreen('dashboard')
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : 'Business onboarding failed.')
@@ -781,6 +887,33 @@ function AppContent() {
     reader.readAsDataURL(file)
   }
 
+  const handleBusinessLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']
+    const maxSize = 2 * 1024 * 1024
+
+    if (!validTypes.includes(file.type)) {
+      setAuthError('Please upload a PNG, JPG, or WEBP business image.')
+      return
+    }
+
+    if (file.size > maxSize) {
+      setAuthError('Business image must be 2MB or smaller.')
+      return
+    }
+
+    setAuthError('')
+    setBusinessLogoFile(file)
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      setBusinessLogoPreview(String(reader.result ?? ''))
+    }
+    reader.readAsDataURL(file)
+  }
+
   const handleProfileSave = () => {
     window.localStorage.setItem('khatapro-profile', JSON.stringify(profileForm))
     setScreen('dashboard')
@@ -879,7 +1012,14 @@ function AppContent() {
               key={item.key}
               type="button"
               className={`nav-item ${screen === item.key ? 'active' : ''}`}
-              onClick={() => setScreen(item.key as typeof screen)}
+              onClick={() => {
+                if (item.key === 'settings') {
+                  setSettingsOpen(true)
+                  setActiveSettingsSection('profile')
+                  return
+                }
+                setScreen(item.key as typeof screen)
+              }}
             >
               <item.icon size={16} />
               {item.label}
@@ -888,10 +1028,6 @@ function AppContent() {
         </nav>
 
         <div className="sidebar-footer">
-          <button type="button" className="nav-item profile-link" onClick={() => setScreen('profile')}>
-            <ShieldCheck size={16} />
-            Profile
-          </button>
           <button type="button" className="logout-button" onClick={handleLogout}>
             <LogOut size={15} />
             Logout
@@ -904,6 +1040,8 @@ function AppContent() {
           <OnboardingScreen
             onSubmit={handleOnboardingSubmit}
             error={authError}
+            businessLogoPreview={businessLogoPreview}
+            onBusinessLogoChange={handleBusinessLogoChange}
             onCancel={handleLogout}
           />
         )}
@@ -911,7 +1049,8 @@ function AppContent() {
         {screen === 'dashboard' && (
           <DashboardScreen
             businessName={business?.name ?? demoBusiness.name}
-            customerName={profileForm.name || demoProfile.name}
+            businessLogo={business?.logoUrl || businessLogoPreview || ''}
+            customerName={profileForm.name || business?.name || demoProfile.name}
             summary={dashboardSummary}
             customers={customers}
             transactionsByCustomer={transactionsByCustomer}
@@ -927,6 +1066,10 @@ function AppContent() {
             onSelectCustomer={(customerId) => {
               setSelectedCustomerId(customerId)
               setScreen('khata')
+            }}
+            onOpenSettings={() => {
+              setSettingsOpen(true)
+              setActiveSettingsSection('profile')
             }}
             onLogout={handleLogout}
           />
@@ -1020,12 +1163,6 @@ function AppContent() {
             }}
           />
         )}
-        {screen === 'settings' && (
-          <SettingsShowcaseScreen
-            onOpenAbout={() => setScreen('about')}
-            onOpenDeveloper={() => setScreen('developerProfile')}
-          />
-        )}
         {screen === 'about' && (
           <AboutKahaBookScreen
             onBack={() => setScreen('settings')}
@@ -1108,6 +1245,46 @@ function AppContent() {
         </button>
       )}
 
+      <SettingsDrawer
+        open={settingsOpen}
+        activeSection={activeSettingsSection}
+        onSelectSection={(section) => setActiveSettingsSection(section)}
+        onClose={() => setSettingsOpen(false)}
+        onOpenAbout={() => {
+          setScreen('about')
+          setSettingsOpen(false)
+        }}
+        onOpenDeveloper={() => {
+          setScreen('developerProfile')
+          setSettingsOpen(false)
+        }}
+        profileForm={profileForm}
+        onProfileChange={setProfileForm}
+        onProfileSave={() => {
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem('khatapro-profile', JSON.stringify(profileForm))
+          }
+          setSettingsFeedback({ type: 'success', message: 'Profile updated successfully.' })
+        }}
+        themeMode={themeMode}
+        onThemeChange={setThemeMode}
+        selectedLanguage={selectedLanguage}
+        onLanguageChange={setSelectedLanguage}
+        notificationsEnabled={notificationsEnabled}
+        onToggleNotifications={() => setNotificationsEnabled((prev) => !prev)}
+        compactLayout={compactLayout}
+        onToggleCompactLayout={() => setCompactLayout((prev) => !prev)}
+        onLogout={async () => {
+          if (window.confirm('Are you sure you want to logout?')) {
+            await signOutUser()
+            setScreen('login')
+            setAuthMode('login')
+            setSettingsOpen(false)
+            setToast({ type: 'success', message: 'You have been logged out.' })
+          }
+        }}
+      />
+
       <nav className="mobile-bottom-nav">
         {[
           { key: 'dashboard', label: 'Home', icon: LayoutDashboard },
@@ -1115,7 +1292,7 @@ function AppContent() {
           { key: 'addCustomer', label: '+', icon: Plus, special: true },
           { key: 'suppliers', label: 'Suppliers', icon: Building2 },
           { key: 'reports', label: 'Reports', icon: TrendingUp },
-          { key: 'profile', label: 'Profile', icon: ShieldCheck },
+          { key: 'settings', label: 'Settings', icon: Settings },
         ].map((item) => (
           <button
             key={item.key}
@@ -1124,6 +1301,11 @@ function AppContent() {
             onClick={() => {
               if (item.key === 'addCustomer') {
                 setScreen('addCustomer')
+                return
+              }
+              if (item.key === 'settings') {
+                setSettingsOpen(true)
+                setActiveSettingsSection('profile')
                 return
               }
               setScreen(item.key as typeof screen)
@@ -1141,7 +1323,7 @@ function AppContent() {
 const demoBusiness: Business = {
   id: 'demo-business',
   ownerId: 'demo-user',
-  name: 'Aarav Traders',
+  name: 'Manish Kumar Yadav Traders',
   category: 'Retail',
   address: 'MG Road',
   city: 'Bangalore',
@@ -1152,10 +1334,10 @@ const demoBusiness: Business = {
 
 const demoProfile = {
   uid: 'demo-user',
-  name: 'Aarav Mehta',
-  email: 'aarav@khatapro.com',
-  phone: '+91 98765 43210',
-  photoURL: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80',
+  name: DEFAULT_PROFILE_NAME,
+  email: 'manish25er@gmail.com',
+  phone: '+91 62830 92662',
+  photoURL: developerProfileImage,
   businessId: 'demo-business',
   onboardingCompleted: true,
 }
@@ -1186,7 +1368,7 @@ function DeveloperIntroScreen({
   onSkip: () => void
 }) {
   const introSlides = [
-    { title: 'Manish Kumar', role: 'Business Growth', description: 'Building modern fintech experiences that make business operations smarter, faster, and more reliable.', highlights: ['Finance', 'Business', 'Growth'] },
+    { title: 'Er. Manish Kumar Yadav', role: 'Software Engineer', description: 'Building modern fintech experiences that make business operations smarter, faster, and more reliable.', highlights: ['Finance', 'Business', 'Growth'] },
     { title: 'KhataPro', role: 'Digital Business Management', description: 'Track customers, payments, balances, and business activity from a clean mobile dashboard that keeps your work organized.', highlights: ['Khata', 'Finance', 'Dashboard'] },
     { title: 'Smart Ledger', role: 'Daily Control', description: 'Stay in control of receivables, dues, and billing records with a simple flow designed for real business use.', highlights: ['Records', 'Insights', 'Trust'] },
     { title: 'Welcome to KhataPro', role: 'Let’s Begin', description: 'Your digital business management app is ready to help you run and grow your business with confidence.', highlights: ['Launch App', 'Manage Smartly', 'Grow Faster'] },
@@ -1217,19 +1399,38 @@ function DeveloperIntroScreen({
 
         {!isFirstSlide && <p className="developer-intro-kicker">Step {currentIndex + 1} / {introSlides.length}</p>}
 
-        <div className={`developer-profile-card ${isFirstSlide ? 'developer-profile-card--first' : ''}`}>
+        <div className={`developer-profile-card ${isFirstSlide ? 'developer-profile-card--first developer-profile-card--solo' : ''}`}>
           <div className="developer-avatar-wrap">
-            <img src={developerProfileImage} alt="Manish Kumar" className="developer-profile-image" />
+            <img src={developerProfileImage} alt="Er. Manish Kumar Yadav" className="developer-profile-image" />
           </div>
 
-          <h2>{activeSlide.title}</h2>
+          {!isFirstSlide && <h2>{activeSlide.title}</h2>}
 
-          <div className="developer-role">
-            <span className="developer-role-icon">✓</span>
-            <span>{activeSlide.role}</span>
-          </div>
+          {!isFirstSlide && (
+            <div className="developer-role">
+              <span className="developer-role-icon">✓</span>
+              <span>{activeSlide.role}</span>
+            </div>
+          )}
 
-          <p className="developer-tagline">{activeSlide.description}</p>
+          {!isFirstSlide && <p className="developer-tagline">{activeSlide.description}</p>}
+
+          {isFirstSlide && (
+            <div className="first-intro-hero">
+              <div className="first-intro-bookmark" aria-hidden="true">
+                <div className="brand-book intro-brand-book">
+                  <span className="book-spine" />
+                  <span className="book-pages" />
+                </div>
+              </div>
+              <div className="developer-intro-brand-badge">KhataPro</div>
+              <p className="developer-intro-splash-copy">Digital Business Management</p>
+              <div className="first-intro-meta">
+                <span>Er. Manish Kumar Yadav</span>
+                <small>Software Engineer</small>
+              </div>
+            </div>
+          )}
         </div>
 
         {!isFirstSlide && (
@@ -1457,12 +1658,17 @@ function AuthScreen({
 function OnboardingScreen({
   onSubmit,
   error,
+  businessLogoPreview,
+  onBusinessLogoChange,
   onCancel,
 }: {
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
   error: string
+  businessLogoPreview: string
+  onBusinessLogoChange: (event: React.ChangeEvent<HTMLInputElement>) => void
   onCancel: () => void
 }) {
+  const previewInitials = 'B'
   return (
     <div className="screen onboarding-screen fade-up">
       <div className="flow-steps">
@@ -1479,6 +1685,19 @@ function OnboardingScreen({
         <label className="field">
           <span>Business Name</span>
           <input name="businessName" type="text" placeholder="Enter business name" />
+        </label>
+
+        <label className="field">
+          <span>Business logo (optional)</span>
+          <div className="business-logo-upload-box">
+            {businessLogoPreview ? (
+              <img src={businessLogoPreview} alt="Business logo preview" className="business-logo-preview-image" />
+            ) : (
+              <div className="business-logo-placeholder">{previewInitials}</div>
+            )}
+            <span>{businessLogoPreview ? 'Change logo' : 'Upload logo'}</span>
+          </div>
+          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={onBusinessLogoChange} className="business-logo-input" />
         </label>
 
         <label className="field">
@@ -1731,6 +1950,468 @@ function SettingsShowcaseScreen({
   )
 }
 
+type SettingsSection = 'profile' | 'developer' | 'appearance' | 'language' | 'notifications' | 'privacy' | 'preferences' | 'support' | 'about' | 'logout'
+
+function SettingsDrawer({
+  open,
+  activeSection,
+  onSelectSection,
+  onClose,
+  onOpenAbout,
+  onOpenDeveloper,
+  profileForm,
+  onProfileChange,
+  onProfileSave,
+  themeMode,
+  onThemeChange,
+  selectedLanguage,
+  onLanguageChange,
+  notificationsEnabled,
+  onToggleNotifications,
+  compactLayout,
+  onToggleCompactLayout,
+  onLogout,
+}: {
+  open: boolean
+  activeSection: SettingsSection
+  onSelectSection: (section: SettingsSection) => void
+  onClose: () => void
+  onOpenAbout: () => void
+  onOpenDeveloper: () => void
+  profileForm: typeof demoProfile
+  onProfileChange: React.Dispatch<React.SetStateAction<typeof demoProfile>>
+  onProfileSave: () => void
+  themeMode: 'light' | 'dark' | 'system'
+  onThemeChange: (value: 'light' | 'dark' | 'system') => void
+  selectedLanguage: 'en' | 'hi'
+  onLanguageChange: (value: 'en' | 'hi') => void
+  notificationsEnabled: boolean
+  onToggleNotifications: () => void
+  compactLayout: boolean
+  onToggleCompactLayout: () => void
+  onLogout: () => void
+}) {
+  const menuItems = [
+    { key: 'profile', label: 'My Profile', icon: UserRound, description: 'Account details' },
+    { key: 'developer', label: 'Developer Profile', icon: Code2, description: 'App credits' },
+    { key: 'appearance', label: 'Appearance & Theme', icon: Palette, description: 'Light / dark / system' },
+    { key: 'language', label: 'Language', icon: Languages, description: 'English / Hindi' },
+    { key: 'notifications', label: 'Notifications', icon: Bell, description: 'Alerts and reminders' },
+    { key: 'privacy', label: 'Privacy & Security', icon: ShieldCheck, description: 'Account protection' },
+    { key: 'preferences', label: 'App Preferences', icon: SlidersHorizontal, description: 'Layout and behavior' },
+    { key: 'support', label: 'Help & Support', icon: CircleHelp, description: 'FAQs and contacts' },
+    { key: 'about', label: 'About KhataPro', icon: Info, description: 'Application details' },
+    { key: 'logout', label: 'Logout', icon: LogOut, description: 'Sign out securely' },
+  ] as const
+
+  const settingsFeedback = null
+
+  const handleProfilePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const nextUrl = String(reader.result ?? '')
+      onProfileChange((prev) => ({ ...prev, photoURL: nextUrl }))
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const renderContent = () => {
+    switch (activeSection) {
+      case 'profile':
+        return (
+          <div className="settings-panel-section">
+            <div className="settings-hero">
+              <div className="settings-hero-badge">
+                <UserRound size={18} />
+              </div>
+              <div>
+                <p className="settings-eyebrow">Account</p>
+                <h3>My Profile</h3>
+              </div>
+            </div>
+
+            <div className="profile-edit-card">
+              <label className="profile-avatar-upload settings-avatar-upload" htmlFor="settings-profile-upload">
+                <div className="profile-avatar-preview">
+                  <img src={profileForm.photoURL} alt="Profile" />
+                </div>
+                <span>Upload photo</span>
+                <input id="settings-profile-upload" type="file" accept="image/*" onChange={handleProfilePhotoUpload} />
+              </label>
+              <div className="settings-form-grid">
+                <label className="settings-field">
+                  <span>Full name</span>
+                  <input value={profileForm.name} onChange={(event) => onProfileChange((prev) => ({ ...prev, name: event.target.value }))} />
+                </label>
+                <label className="settings-field">
+                  <span>Email</span>
+                  <input type="email" value={profileForm.email} onChange={(event) => onProfileChange((prev) => ({ ...prev, email: event.target.value }))} />
+                </label>
+                <label className="settings-field">
+                  <span>Phone</span>
+                  <input value={profileForm.phone} onChange={(event) => onProfileChange((prev) => ({ ...prev, phone: event.target.value }))} />
+                </label>
+                <label className="settings-field">
+                  <span>Photo URL</span>
+                  <input value={profileForm.photoURL} onChange={(event) => onProfileChange((prev) => ({ ...prev, photoURL: event.target.value }))} />
+                </label>
+              </div>
+            </div>
+
+            <div className="settings-actions-row">
+              <button type="button" className="secondary-button" onClick={onClose}>Close</button>
+              <button type="button" className="primary-button" onClick={onProfileSave}>Save Profile</button>
+            </div>
+          </div>
+        )
+
+      case 'developer':
+        return (
+          <div className="settings-panel-section">
+            <div className="settings-hero">
+              <div className="settings-hero-badge tech">
+                <Code2 size={18} />
+              </div>
+              <div>
+                <p className="settings-eyebrow">Developer</p>
+                <h3>Developer Profile</h3>
+              </div>
+            </div>
+
+            <div className="developer-card settings-card">
+              <div className="developer-avatar-ring">
+                <img src={developerProfileImage} alt="Er. Manish Kumar" />
+              </div>
+              <div className="developer-meta-stack">
+                <span className="developer-badge">Developed by</span>
+                <h4>Er. Manish Kumar Yadav</h4>
+                <p>Designed this Khatabook</p>
+              </div>
+            </div>
+
+            <div className="settings-box-list">
+              <div className="settings-box-row">
+                <span className="settings-box-icon"><Phone size={16} /></span>
+                <div>
+                  <strong>Phone</strong>
+                  <a href="tel:+916283092662">+91 62830 92662</a>
+                </div>
+              </div>
+              <div className="settings-box-row">
+                <span className="settings-box-icon"><Mail size={16} /></span>
+                <div>
+                  <strong>Email</strong>
+                  <a href="mailto:manish25er@gmail.com">manish25er@gmail.com</a>
+                </div>
+              </div>
+              <div className="settings-box-row">
+                <span className="settings-box-icon"><Globe size={16} /></span>
+                <div>
+                  <strong>Portfolio</strong>
+                  <a href="https://roomspot.manish25er.workers.dev/portfolio" target="_blank" rel="noreferrer">roomspot.manish25er.workers.dev/portfolio</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+
+      case 'appearance':
+        return (
+          <div className="settings-panel-section">
+            <div className="settings-hero">
+              <div className="settings-hero-badge theme">
+                <Palette size={18} />
+              </div>
+              <div>
+                <p className="settings-eyebrow">Customize</p>
+                <h3>Appearance & Theme</h3>
+              </div>
+            </div>
+
+            <div className="theme-options">
+              {(['light', 'dark', 'system'] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={`theme-option ${themeMode === option ? 'selected' : ''}`}
+                  onClick={() => onThemeChange(option)}
+                >
+                  <span className="theme-option-label">{option === 'light' ? 'Light' : option === 'dark' ? 'Dark' : 'System default'}</span>
+                  {themeMode === option && <Check size={16} />}
+                </button>
+              ))}
+            </div>
+
+            <div className="settings-preview-card">
+              <div className="preview-window">
+                <div className="preview-bar" />
+                <div className="preview-cards">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+
+      case 'language':
+        return (
+          <div className="settings-panel-section">
+            <div className="settings-hero">
+              <div className="settings-hero-badge language">
+                <Languages size={18} />
+              </div>
+              <div>
+                <p className="settings-eyebrow">Preferences</p>
+                <h3>Language</h3>
+              </div>
+            </div>
+
+            <div className="theme-options vertical">
+              {(['en', 'hi'] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={`theme-option ${selectedLanguage === option ? 'selected' : ''}`}
+                  onClick={() => onLanguageChange(option)}
+                >
+                  <span className="theme-option-label">{option === 'en' ? 'English' : 'हिन्दी'}</span>
+                  {selectedLanguage === option && <Check size={16} />}
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+
+      case 'notifications':
+        return (
+          <div className="settings-panel-section">
+            <div className="settings-hero">
+              <div className="settings-hero-badge notification">
+                <Bell size={18} />
+              </div>
+              <div>
+                <p className="settings-eyebrow">Alerts</p>
+                <h3>Notifications</h3>
+              </div>
+            </div>
+
+            <div className="settings-toggle-card">
+              <div>
+                <strong>Push & reminders</strong>
+                <small>Receive reminders, payment alerts, and updates.</small>
+              </div>
+              <button type="button" className={`switch-toggle ${notificationsEnabled ? 'on' : ''}`} onClick={onToggleNotifications} aria-label="Toggle notifications">
+                <span />
+              </button>
+            </div>
+          </div>
+        )
+
+      case 'privacy':
+        return (
+          <div className="settings-panel-section">
+            <div className="settings-hero">
+              <div className="settings-hero-badge privacy">
+                <ShieldCheck size={18} />
+              </div>
+              <div>
+                <p className="settings-eyebrow">Security</p>
+                <h3>Privacy & Security</h3>
+              </div>
+            </div>
+
+            <div className="settings-box-list">
+              <div className="settings-box-row">
+                <span className="settings-box-icon"><ShieldCheck size={16} /></span>
+                <div>
+                  <strong>Account protection</strong>
+                  <small>Protected using Firebase authentication and secure app sessions.</small>
+                </div>
+              </div>
+              <div className="settings-box-row muted">
+                <span className="settings-box-icon"><Lock size={16} /></span>
+                <div>
+                  <strong>Password change</strong>
+                  <small>Managed via Firebase account settings when supported by your authentication provider.</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+
+      case 'preferences':
+        return (
+          <div className="settings-panel-section">
+            <div className="settings-hero">
+              <div className="settings-hero-badge pref">
+                <SlidersHorizontal size={18} />
+              </div>
+              <div>
+                <p className="settings-eyebrow">Layout</p>
+                <h3>App Preferences</h3>
+              </div>
+            </div>
+
+            <div className="settings-toggle-card">
+              <div>
+                <strong>Compact layout</strong>
+                <small>Reduce spacing for smaller mobile screens.</small>
+              </div>
+              <button type="button" className={`switch-toggle ${compactLayout ? 'on' : ''}`} onClick={onToggleCompactLayout} aria-label="Toggle compact layout">
+                <span />
+              </button>
+            </div>
+          </div>
+        )
+
+      case 'support':
+        return (
+          <div className="settings-panel-section">
+            <div className="settings-hero">
+              <div className="settings-hero-badge support">
+                <CircleHelp size={18} />
+              </div>
+              <div>
+                <p className="settings-eyebrow">Support</p>
+                <h3>Help & Support</h3>
+              </div>
+            </div>
+
+            <div className="settings-box-list">
+              <div className="settings-box-row">
+                <span className="settings-box-icon"><Mail size={16} /></span>
+                <div>
+                  <strong>Email support</strong>
+                  <a href="mailto:manish25er@gmail.com">manish25er@gmail.com</a>
+                </div>
+              </div>
+              <div className="settings-box-row">
+                <span className="settings-box-icon"><Globe size={16} /></span>
+                <div>
+                  <strong>Portfolio</strong>
+                  <a href="https://roomspot.manish25er.workers.dev/portfolio" target="_blank" rel="noreferrer">roomspot.manish25er.workers.dev/portfolio</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+
+      case 'about':
+        return (
+          <div className="settings-panel-section">
+            <div className="settings-hero">
+              <div className="settings-hero-badge about">
+                <Info size={18} />
+              </div>
+              <div>
+                <p className="settings-eyebrow">Information</p>
+                <h3>About KhataPro</h3>
+              </div>
+            </div>
+
+            <div className="about-summary-card">
+              <div className="brand-mark small">
+                <div className="brand-book mini">
+                  <span className="book-spine" />
+                  <span className="book-pages" />
+                </div>
+              </div>
+              <h4>KhataPro</h4>
+              <p>Digital Business Management</p>
+              <small>Version 1.0.0</small>
+            </div>
+
+            <div className="settings-box-list">
+              <div className="settings-box-row">
+                <span className="settings-box-icon"><FileText size={16} /></span>
+                <div>
+                  <strong>App purpose</strong>
+                  <small>Track customers, payments, balances, and daily business activity.</small>
+                </div>
+              </div>
+              <div className="settings-box-row">
+                <span className="settings-box-icon"><UserRound size={16} /></span>
+                <div>
+                  <strong>Developer</strong>
+                  <button type="button" className="text-link inline" onClick={() => onSelectSection('developer')}>View developer profile</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+
+      case 'logout':
+        return (
+          <div className="settings-panel-section">
+            <div className="settings-hero">
+              <div className="settings-hero-badge logout">
+                <LogOut size={18} />
+              </div>
+              <div>
+                <p className="settings-eyebrow">Session</p>
+                <h3>Logout</h3>
+              </div>
+            </div>
+
+            <div className="settings-warning-card">
+              <p>Are you sure you want to sign out from KhataPro?</p>
+              <button type="button" className="primary-button danger" onClick={onLogout}>Log out</button>
+            </div>
+          </div>
+        )
+
+      default:
+        return null
+    }
+  }
+
+  return (
+    <>
+      <div className={`settings-overlay ${open ? 'visible' : ''}`} onClick={onClose} aria-hidden={!open} />
+      <aside className={`settings-drawer ${open ? 'open' : ''}`} aria-label="Settings panel">
+        <div className="settings-drawer-header">
+          <div>
+            <p className="settings-drawer-label">Preferences</p>
+            <h3>Settings</h3>
+          </div>
+          <button type="button" aria-label="Close settings" className="settings-close-button" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="settings-drawer-body">
+          <nav className="settings-menu" aria-label="Settings menu">
+            {menuItems.map(({ key, label, icon: Icon, description }) => (
+              <button
+                key={key}
+                type="button"
+                className={`settings-menu-item ${activeSection === key ? 'active' : ''}`}
+                onClick={() => onSelectSection(key)}
+              >
+                <span className="settings-menu-icon"><Icon size={17} /></span>
+                <span className="settings-menu-copy">
+                  <strong>{label}</strong>
+                  <small>{description}</small>
+                </span>
+                <ChevronRight size={16} />
+              </button>
+            ))}
+          </nav>
+
+          <div className="settings-content-panel">
+            {renderContent()}
+          </div>
+        </div>
+      </aside>
+    </>
+  )
+}
+
 function AboutKahaBookScreen({
   onBack,
   onOpenDeveloper,
@@ -1820,11 +2501,11 @@ function DeveloperProfileScreen({
 
       <div className="developer-profile-card-demo">
         <div className="developer-avatar-frame">
-          <img src={developerProfileImage} alt="Er. Manish Kumar" className="developer-demo-photo" />
+          <img src={developerProfileImage} alt="Er. Manish Kumar Yadav" className="developer-demo-photo" />
         </div>
         <div className="developer-bio-label">Developed by</div>
-        <h4>Er. Manish Kumar</h4>
-        <p>Full Stack Developer</p>
+        <h4>Er. Manish Kumar Yadav</h4>
+        <p>Designed this Khatabook</p>
       </div>
 
       <div className="mini-quote-card">
@@ -1876,6 +2557,7 @@ function DeveloperProfileScreen({
 
 function DashboardScreen({
   businessName,
+  businessLogo,
   customerName,
   summary,
   customers,
@@ -1884,9 +2566,11 @@ function DashboardScreen({
   onAddTransaction,
   onViewCustomers,
   onSelectCustomer,
+  onOpenSettings,
   onLogout,
 }: {
   businessName: string
+  businessLogo?: string
   customerName: string
   summary: { totalReceivable: number; totalPayable: number; totalGiven: number; totalReceived: number }
   customers: Customer[]
@@ -1895,8 +2579,10 @@ function DashboardScreen({
   onAddTransaction: () => void
   onViewCustomers: () => void
   onSelectCustomer: (customerId: string) => void
+  onOpenSettings: () => void
   onLogout: () => void
 }) {
+  const businessInitials = (businessName || 'K').split(' ').map((part) => part[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
   return (
     <div className="screen dashboard-screen fade-up">
       <header className="dashboard-header">
@@ -1918,20 +2604,23 @@ function DashboardScreen({
             <LogOut size={14} />
             Logout
           </button>
-          <button type="button" className="icon-button bell-button">
+          <button type="button" className="icon-button bell-button" aria-label="Notifications">
             <Bell size={16} />
           </button>
-          <img
-            src={demoProfile.photoURL}
-            alt="Profile"
-            className="profile-mini-avatar"
-          />
+          <button type="button" className="business-header-button" onClick={onOpenSettings} aria-label="Business settings">
+            {businessLogo ? (
+              <img src={businessLogo} alt={`${businessName} logo`} className="business-header-avatar" />
+            ) : (
+              <div className="business-header-avatar default-business-avatar">{businessInitials}</div>
+            )}
+          </button>
         </div>
       </header>
 
       <div className="dashboard-greeting">
         <p className="mini-label light">Good Morning,</p>
         <h3>{customerName}</h3>
+        <p className="dashboard-business-name">{businessName}</p>
       </div>
 
       <div className="summary-grid">

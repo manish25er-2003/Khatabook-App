@@ -28,6 +28,7 @@ export interface Business {
   state?: string
   country?: string
   currency: string
+  logoUrl?: string
   createdAt?: string
   updatedAt?: string
 }
