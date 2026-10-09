@@ -4691,10 +4691,14 @@ button {
     }
     .mobile-app-screen {
         min-height: 100vh;
+        min-height: 100dvh;
         border-radius: 0;
         margin: 0 auto;
         width: min(100%, 430px);
         max-width: none;
+    }
+    .splash-exact-screen {
+        overflow-y: auto;
     }
     .settings-drawer {
         width: min(100vw, 420px);
@@ -4942,6 +4946,7 @@ button {
     }
     .mobile-app-screen {
         min-height: 100vh;
+        min-height: 100dvh;
         border-radius: 0;
     }
     .splash-brand-mark {
