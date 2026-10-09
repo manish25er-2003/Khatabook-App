@@ -1186,18 +1186,10 @@ function DeveloperIntroScreen({
   onSkip: () => void
 }) {
   const introSlides = [
-    { title: 'Er. Manish Kumar', role: 'Software Engineer', description: 'Building modern digital fintech experiences with a sharp focus on real business workflows.', highlights: ['Finance', 'UX', 'Product'] },
-    { title: 'KhataPro', role: 'Digital Ledger', description: 'A premium mobile-first khata companion for customer billing, payment tracking, and business clarity.', highlights: ['Smart Khata', 'Business Control', 'Daily Insights'] },
-    { title: 'Customer Sync', role: 'Live Accounts', description: 'Every customer balance updates from real transaction records so your ledger stays accurate and transparent.', highlights: ['Balances', 'History', 'Trust'] },
-    { title: 'Payment Flow', role: 'UPI Ready', description: 'Collect pending dues with guided payments, instant status updates, and settlement tracking for your shop.', highlights: ['Pending', 'Settlement', 'Faster Recovery'] },
-    { title: 'Real-Time Tracking', role: 'Every Transaction', description: 'Track given, received, and outstanding values without manual calculations or confusion.', highlights: ['Given', 'Received', 'Outstanding'] },
-    { title: 'Business Profile', role: 'Owner Identity', description: 'Add your business identity, contact details, and profile image to keep your account personal and complete.', highlights: ['Business', 'Profile', 'Identity'] },
-    { title: 'Loan Assistance', role: 'Guided Eligibility', description: 'Explore offers responsibly with clear wording on eligibility before any business financing decision is made.', highlights: ['Eligible Offers', 'Clear Terms', 'Smart Checks'] },
-    { title: 'Reports & Insights', role: 'Business Health', description: 'See total receivables, payable totals, and trends so the next business move feels more confident.', highlights: ['Reports', 'Cash Flow', 'Forecast'] },
-    { title: 'Supplier Support', role: 'Complete Ledger', description: 'Track both customer and supplier activity in one clean workflow for smoother business management.', highlights: ['Customers', 'Suppliers', 'All-in-One'] },
-    { title: 'Easy Onboarding', role: 'Quick Setup', description: 'Create your account, fill your business details, and start managing operations in a few simple steps.', highlights: ['Fast Setup', 'Simple Steps', 'Ready To Go'] },
-    { title: 'Secure Access', role: 'Protected', description: 'Built for trustworthy access with clean authentication and a premium mobile product feel.', highlights: ['Protected', 'Simple', 'Reliable'] },
-    { title: 'Welcome to KhataPro', role: 'Let’s Begin', description: 'Your digital khata experience is ready. Continue to the app and manage your business with confidence.', highlights: ['Launch App', 'Track Business', 'Stay Ahead'] },
+    { title: 'Manish Kumar', role: 'Business Growth', description: 'Building modern fintech experiences that make business operations smarter, faster, and more reliable.', highlights: ['Finance', 'Business', 'Growth'] },
+    { title: 'KhataPro', role: 'Digital Business Management', description: 'Track customers, payments, balances, and business activity from a clean mobile dashboard that keeps your work organized.', highlights: ['Khata', 'Finance', 'Dashboard'] },
+    { title: 'Smart Ledger', role: 'Daily Control', description: 'Stay in control of receivables, dues, and billing records with a simple flow designed for real business use.', highlights: ['Records', 'Insights', 'Trust'] },
+    { title: 'Welcome to KhataPro', role: 'Let’s Begin', description: 'Your digital business management app is ready to help you run and grow your business with confidence.', highlights: ['Launch App', 'Manage Smartly', 'Grow Faster'] },
   ]
 
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -1214,19 +1206,20 @@ function DeveloperIntroScreen({
 
   const activeSlide = introSlides[currentIndex]
   const progressWidth = `${((currentIndex + 1) / introSlides.length) * 100}%`
+  const isFirstSlide = currentIndex === 0
 
   return (
     <div className="developer-intro-screen">
-      <div className="developer-intro-card">
+      <div className={`developer-intro-card ${isFirstSlide ? 'developer-intro-card--first' : ''}`}>
         <div className="intro-progress-bar" aria-hidden="true">
           <span style={{ width: progressWidth }} />
         </div>
 
-        <p className="developer-intro-kicker">Step {currentIndex + 1} / {introSlides.length}</p>
+        {!isFirstSlide && <p className="developer-intro-kicker">Step {currentIndex + 1} / {introSlides.length}</p>}
 
-        <div className="developer-profile-card">
+        <div className={`developer-profile-card ${isFirstSlide ? 'developer-profile-card--first' : ''}`}>
           <div className="developer-avatar-wrap">
-            <img src={developerProfileImage} alt="Er. Manish Kumar" className="developer-profile-image" />
+            <img src={developerProfileImage} alt="Manish Kumar" className="developer-profile-image" />
           </div>
 
           <h2>{activeSlide.title}</h2>
@@ -1239,23 +1232,29 @@ function DeveloperIntroScreen({
           <p className="developer-tagline">{activeSlide.description}</p>
         </div>
 
-        <div className="feature-grid">
-          {activeSlide.highlights.map((item) => (
-            <span key={item} className="feature-pill">{item}</span>
-          ))}
-        </div>
+        {!isFirstSlide && (
+          <div className="feature-grid">
+            {activeSlide.highlights.map((item) => (
+              <span key={item} className="feature-pill">{item}</span>
+            ))}
+          </div>
+        )}
 
-        <div className="developer-branding">
-          <div className="developer-divider" />
-          <p className="developer-introducing">Introducing</p>
-          <h3>KhataPro</h3>
-          <p className="developer-subtitle">Digital Khata &amp; Business Management</p>
-        </div>
+        {!isFirstSlide && (
+          <div className="developer-branding">
+            <div className="developer-divider" />
+            <p className="developer-introducing">Introducing</p>
+            <h3>KhataPro</h3>
+            <p className="developer-subtitle">Digital Business Management</p>
+          </div>
+        )}
 
-        <div className="developer-intro-footer">
-          <span>© 2026 KhataPro</span>
-          <small>Designed &amp; Developed by Er. Manish Kumar</small>
-        </div>
+        {!isFirstSlide && (
+          <div className="developer-intro-footer">
+            <span>© 2026 KhataPro</span>
+            <small>Developed by Manish Kumar</small>
+          </div>
+        )}
 
         <div className="intro-actions">
           <button type="button" className="text-link intro-skip" onClick={onSkip}>Skip</button>
@@ -1298,7 +1297,7 @@ function SplashScreen({
           </div>
 
           <h1 className="splash-title">KahaBook</h1>
-          <p className="splash-subtitle">Simple Accounting<br />for Your Business</p>
+          <p className="splash-subtitle">Digital Business Management</p>
 
           <div className="splash-metrics" aria-label="Business metrics preview">
             <div className="metric-card">

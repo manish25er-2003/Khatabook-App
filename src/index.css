@@ -1,42 +1,60 @@
 :root {
-  font-family: Inter, 'Segoe UI', sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color: #152c2a;
-  background: #081311;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+    font-family: Inter, 'Segoe UI', sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
+    color: #173C32;
+    background: #F5F9F7;
+    --emerald-600: #087F5B;
+    --emerald-500: #10B981;
+    --emerald-400: #34D399;
+    --emerald-50: #F0FDF4;
+    --emerald-100: #ECFDF5;
+    --bg-main: #F5F9F7;
+    --bg-soft: #F0FDF4;
+    --card-bg: #FFFFFF;
+    --card-border: #E2E8F0;
+    --text-dark: #173C32;
+    --text-secondary: #64748B;
+    --text-muted: #6B8A82;
+    --success: #16A34A;
+    --error: #DC2626;
+    --info: #2563EB;
+    --shadow-soft: 0 18px 38px rgba(8, 127, 91, 0.08);
+    --shadow-card: 0 14px 28px rgba(15, 23, 42, 0.05);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 html {
-  scroll-behavior: smooth;
+    scroll-behavior: smooth;
 }
 
 body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-  background: radial-gradient(circle at top, #102624 0%, #081311 35%, #040909 100%);
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    background: linear-gradient(180deg, #F5F9F7 0%, #F0FDF4 100%);
+    color: var(--text-dark);
 }
 
 #root {
-  min-height: 100vh;
-  width: 100%;
+    min-height: 100vh;
+    width: 100%;
 }
 
 * {
-  box-sizing: border-box;
+    box-sizing: border-box;
 }
 
 img,
 svg {
-  display: block;
+    display: block;
 }
 
 button,
 input,
 select {
-  font: inherit;
+    font: inherit;
 }
