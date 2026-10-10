@@ -3735,6 +3735,10 @@ button {
     cursor: pointer;
 }
 
+.settings-back-button {
+    display: none;
+}
+
 .settings-drawer-body {
     display: grid;
     grid-template-columns: 260px minmax(0, 1fr);
@@ -3980,6 +3984,19 @@ button {
     justify-content: flex-end;
     gap: 10px;
     margin-top: 2px;
+}
+
+.settings-feedback {
+    margin: 0 auto 0 0;
+    color: #0d7d67;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.settings-language-help {
+    margin: 0;
+    color: #59736d;
+    font-size: 0.82rem;
 }
 
 .developer-card {
@@ -4578,6 +4595,9 @@ button {
         padding-bottom: 32px;
         background: linear-gradient(180deg, #f4fff9 0%, #eafaf4 100%);
     }
+    .app-shell-main {
+        padding-bottom: calc(108px + env(safe-area-inset-bottom));
+    }
     .auth-shell {
         display: flex;
         align-items: flex-start;
@@ -4685,47 +4705,86 @@ button {
         overflow-y: auto;
     }
     .settings-drawer {
-        width: min(100vw, 420px);
-        border-radius: 0 24px 24px 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        border-radius: 0;
         background: rgba(247, 251, 249, 0.98);
         box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
     }
     .settings-drawer-header {
-        padding: 16px 14px 12px;
+        min-height: 68px;
+        padding: 12px 14px;
     }
     .settings-drawer-header h3 {
         font-size: 1.2rem;
     }
     .settings-drawer-body {
-        grid-template-columns: 1fr;
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
     }
     .settings-menu {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
-        padding: 10px 10px 12px;
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 4px;
+        min-height: 0;
+        padding: 8px 10px calc(16px + env(safe-area-inset-bottom));
         border-right: none;
-        border-bottom: 1px solid rgba(15, 118, 94, 0.08);
+        border-bottom: none;
         background: rgba(255, 255, 255, 0.52);
+        overflow-y: auto;
+        overscroll-behavior: contain;
     }
     .settings-menu-item {
-        min-height: 64px;
-        padding: 8px 8px;
-        border-radius: 14px;
+        min-height: 50px;
+        padding: 6px 10px;
+        border-radius: 12px;
     }
     .settings-menu-copy strong {
-        font-size: 0.7rem;
-        line-height: 1.25;
+        font-size: 0.82rem;
+        line-height: 1.3;
     }
     .settings-menu-copy small {
-        display: none;
+        display: block;
+        font-size: 0.67rem;
+        line-height: 1.25;
     }
     .settings-menu-icon {
-        width: 30px;
-        height: 30px;
+        width: 32px;
+        height: 32px;
     }
     .settings-content-panel {
-        padding: 14px 12px 20px;
+        display: none;
+        flex: 1;
+        min-height: 0;
+        padding: 14px 12px calc(24px + env(safe-area-inset-bottom));
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+    .settings-drawer--section-open .settings-menu {
+        display: none;
+    }
+    .settings-drawer--section-open .settings-content-panel {
+        display: block;
+    }
+    .settings-back-button {
+        display: inline-flex;
+        width: 40px;
+        height: 40px;
+        flex: 0 0 40px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(15, 118, 94, 0.12);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.8);
+        color: #123d35;
+    }
+    .settings-drawer--section-open .settings-drawer-header > div {
+        flex: 1;
+        min-width: 0;
     }
     .settings-panel-section {
         gap: 14px;
@@ -4772,6 +4831,38 @@ button {
     .settings-box-row {
         gap: 10px;
         padding: 10px 10px;
+    }
+    .profile-edit-card {
+        width: 100%;
+        padding: 12px;
+        gap: 12px;
+    }
+    .settings-form-grid,
+    .settings-field,
+    .settings-field input {
+        width: 100%;
+        min-width: 0;
+    }
+    .settings-actions-row {
+        position: sticky;
+        bottom: 0;
+        z-index: 1;
+        justify-content: stretch;
+        margin: 12px -12px -24px;
+        padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+        background: rgba(250, 252, 251, 0.97);
+        border-top: 1px solid rgba(15, 118, 94, 0.1);
+    }
+    .settings-actions-row .primary-button {
+        flex: 1;
+        min-height: 46px;
+    }
+    .settings-feedback {
+        position: absolute;
+        bottom: calc(100% + 4px);
+        left: 12px;
+        right: 12px;
+        margin: 0;
     }
     .settings-box-row strong {
         font-size: 0.72rem;
@@ -4898,14 +4989,16 @@ button {
         border-radius: 0;
     }
     .settings-menu {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: 1fr;
+        padding-left: 8px;
+        padding-right: 8px;
     }
     .settings-menu-item {
-        min-height: 60px;
-        padding: 7px 6px;
+        min-height: 50px;
+        padding: 6px 8px;
     }
     .settings-content-panel {
-        padding: 12px 10px 18px;
+        padding: 12px 10px calc(24px + env(safe-area-inset-bottom));
     }
     .mobile-header {
         padding: 9px 11px;
@@ -4939,5 +5032,206 @@ button {
     .splash-brand-mark .brand-book {
         width: 104px;
         height: 104px;
+    }
+}
+
+html[data-theme='dark'] body,
+html[data-theme='dark'] #root,
+html[data-theme='dark'] .app-shell,
+html[data-theme='dark'] .app-shell-main,
+html[data-theme='dark'] .content-panel {
+    background: #101a17;
+    color: #e5efec;
+}
+
+html[data-theme='dark'] .screen,
+html[data-theme='dark'] .desktop-sidebar,
+html[data-theme='dark'] .settings-drawer,
+html[data-theme='dark'] .settings-content-panel,
+html[data-theme='dark'] .settings-menu,
+html[data-theme='dark'] .settings-drawer-header,
+html[data-theme='dark'] .auth-card,
+html[data-theme='dark'] .mobile-bottom-nav {
+    background: #17241f;
+    color: #e5efec;
+    border-color: #344740;
+}
+
+html[data-theme='dark'] .settings-drawer-header {
+    background: linear-gradient(180deg, #1b3028, #17241f);
+}
+
+html[data-theme='dark'] .settings-menu {
+    background: #14211c;
+}
+
+html[data-theme='dark'] :is(
+    .profile-edit-card,
+    .settings-card,
+    .settings-toggle-card,
+    .settings-warning-card,
+    .settings-preview-card,
+    .about-summary-card,
+    .settings-box-row,
+    .theme-option,
+    .settings-row,
+    .about-info-row,
+    .profile-card,
+    .metric-card,
+    .mini-stat-card,
+    .customer-preview-row,
+    .customer-row,
+    .txn-item,
+    .ledger-panel,
+    .empty-card,
+    .loan-overview-card,
+    .loan-hero-card,
+    .loan-application-card,
+    .loan-summary-card,
+    .payment-request-card,
+    .success-card,
+    .developer-card,
+    .contact-card,
+    .quote-card,
+    .auth-screen-reference,
+    .loading-card,
+    .placeholder-box
+) {
+    background: #1c2b26;
+    color: #e5efec;
+    border-color: #344740;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+html[data-theme='dark'] :is(
+    [class*='-card'],
+    [class*='-panel'],
+    [class*='-box'],
+    [class*='-modal'],
+    [class*='-row'],
+    [class*='-drawer']
+) {
+    background-color: #1c2b26;
+    color: #e5efec;
+    border-color: #344740;
+}
+
+html[data-theme='dark'] :is(
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    p,
+    strong,
+    label,
+    .settings-drawer-header h3,
+    .settings-menu-item,
+    .settings-hero h3,
+    .settings-field,
+    .settings-field input,
+    .theme-option,
+    .settings-toggle-card strong,
+    .settings-warning-card p,
+    .about-summary-card h4,
+    .developer-meta-stack h4,
+    .sidebar-brand,
+    .nav-item,
+    .profile-meta strong,
+    .metric-card span,
+    .mini-stat-card span,
+    .customer-details strong,
+    .customer-balance strong,
+    .txn-item strong
+) {
+    color: #e5efec;
+}
+
+html[data-theme='dark'] :is(
+    .settings-drawer-label,
+    .settings-eyebrow,
+    .text-link,
+    .settings-box-row a,
+    .settings-box-row .text-link,
+    .settings-menu-icon,
+    .settings-hero-badge,
+    .developer-badge,
+    .profile-avatar-upload span
+) {
+    color: #6ee7b7;
+}
+
+html[data-theme='dark'] :is(
+    .settings-menu-copy small,
+    .settings-toggle-card small,
+    .about-summary-card p,
+    .about-summary-card small,
+    .developer-meta-stack p,
+    .settings-language-help,
+    .settings-copy small,
+    .info-copy small,
+    .profile-meta span,
+    .section-header p,
+    .customer-details small,
+    .customer-balance small,
+    .txn-item small,
+    .contact-row small
+) {
+    color: #a8bbb3;
+}
+
+html[data-theme='dark'] :is(h1, h2, h3, h4, h5, p, strong, label, small) {
+    color: #e5efec;
+}
+
+html[data-theme='dark'] :is(
+    input,
+    select,
+    textarea,
+    .search-box,
+    .settings-field input
+) {
+    background: #111d18;
+    color: #e5efec;
+    border-color: #43584f;
+}
+
+html[data-theme='dark'] :is(input, select, textarea)::placeholder {
+    color: #9cafA7;
+}
+
+html[data-theme='dark'] :is(
+    .settings-close-button,
+    .settings-back-button,
+    .secondary-button,
+    .icon-button.soft
+) {
+    background: #263831;
+    color: #e5efec;
+    border-color: #455a50;
+}
+
+html[data-theme='dark'] .settings-menu-item.active,
+html[data-theme='dark'] .theme-option.selected {
+    background: #1e4537;
+    border-color: #2f7259;
+}
+
+html[data-theme='dark'] .settings-menu-icon,
+html[data-theme='dark'] .settings-box-icon,
+html[data-theme='dark'] .settings-hero-badge {
+    background: #244236;
+    color: #6ee7b7;
+}
+
+html[data-theme='dark'] .mobile-header:not(.green-header),
+html[data-theme='dark'] .settings-actions-row {
+    background: #17241f;
+}
+
+@media (max-width: 640px) {
+    html[data-theme='dark'] .settings-actions-row {
+        background: rgba(23, 36, 31, 0.98);
+        border-top-color: #344740;
     }
 }

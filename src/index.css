@@ -27,6 +27,29 @@
     -moz-osx-font-smoothing: grayscale;
 }
 
+html[data-theme='dark'] {
+    color-scheme: dark;
+    color: #e5efec;
+    background: #101a17;
+    --emerald-600: #34d399;
+    --emerald-500: #34d399;
+    --emerald-400: #6ee7b7;
+    --emerald-50: #152923;
+    --emerald-100: #1b352d;
+    --bg-main: #101a17;
+    --bg-soft: #172621;
+    --card-bg: #1b2925;
+    --card-border: #344740;
+    --text-dark: #e5efec;
+    --text-secondary: #bac9c3;
+    --text-muted: #a2b6ae;
+    --success: #4ade80;
+    --error: #f87171;
+    --info: #60a5fa;
+    --shadow-soft: 0 18px 38px rgba(0, 0, 0, 0.24);
+    --shadow-card: 0 14px 28px rgba(0, 0, 0, 0.2);
+}
+
 html {
     scroll-behavior: smooth;
 }
@@ -36,6 +59,11 @@ body {
     min-width: 320px;
     min-height: 100vh;
     background: linear-gradient(180deg, #F5F9F7 0%, #F0FDF4 100%);
+    color: var(--text-dark);
+}
+
+html[data-theme='dark'] body {
+    background: linear-gradient(180deg, #101a17 0%, #13231d 100%);
     color: var(--text-dark);
 }
 

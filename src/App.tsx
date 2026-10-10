@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import {
   ArrowDownLeft,
   ArrowLeft,
@@ -38,7 +38,7 @@ import {
 } from 'lucide-react'
 import { doc, setDoc } from 'firebase/firestore'
 import './App.css'
-import developerProfileImage from './assets/developer/manish-kumar.png'
+import developerProfileImage from './assets/developer/manish-kumar-optimized.jpg'
 import { firebaseDb, isFirebaseConfigured } from './firebase/config'
 import { AuthProvider, useAuthContext } from './contexts/AuthContext'
 import { signInUser, signOutUser, signUpUser } from './services/authService'
@@ -46,6 +46,7 @@ import { createBusiness, getBusiness } from './services/businessService'
 import { createCustomer, getCustomers } from './services/customerService'
 import { storageService } from './services/storageService'
 import { createTransaction, getCustomerTransactions } from './services/transactionService'
+import { translate, type SupportedLanguage } from './utils/translations'
 import {
   checkLoanEligibility,
   createLoanApplication,
@@ -92,6 +93,13 @@ type PaymentState = {
   note: string
   customerId: string
   createdAt: string
+}
+
+const LanguageContext = createContext<SupportedLanguage>('en')
+
+function useTranslator() {
+  const language = useContext(LanguageContext)
+  return (text: string) => translate(language, text)
 }
 
 const computeCustomerBalance = (customer: Customer, transactions: CustomerTransaction[]) => {
@@ -186,11 +194,12 @@ function AppContent() {
   const [businessLogoFile, setBusinessLogoFile] = useState<File | null>(null)
   const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>(() => {
     if (typeof window === 'undefined') return 'system'
-    return (window.localStorage.getItem('khatapro-theme') as 'light' | 'dark' | 'system') || 'system'
+    const storedTheme = window.localStorage.getItem('khatapro-theme')
+    return storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system' ? storedTheme : 'system'
   })
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'hi'>(() => {
     if (typeof window === 'undefined') return 'en'
-    return (window.localStorage.getItem('khatapro-language') as 'en' | 'hi') || 'en'
+    return window.localStorage.getItem('khatapro-language') === 'hi' ? 'hi' : 'en'
   })
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => {
     if (typeof window === 'undefined') return true
@@ -269,14 +278,21 @@ function AppContent() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     window.localStorage.setItem('khatapro-theme', themeMode)
-    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    const isDark = themeMode === 'system' ? systemDark : themeMode === 'dark'
-    document.documentElement.dataset.theme = isDark ? 'dark' : 'light'
+    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
+    const applyTheme = () => {
+      const isDark = themeMode === 'system' ? systemTheme.matches : themeMode === 'dark'
+      document.documentElement.dataset.theme = isDark ? 'dark' : 'light'
+      document.documentElement.style.colorScheme = isDark ? 'dark' : 'light'
+    }
+    applyTheme()
+    systemTheme.addEventListener('change', applyTheme)
+    return () => systemTheme.removeEventListener('change', applyTheme)
   }, [themeMode])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     window.localStorage.setItem('khatapro-language', selectedLanguage)
+    document.documentElement.lang = selectedLanguage === 'hi' ? 'hi-IN' : 'en-IN'
   }, [selectedLanguage])
 
   useEffect(() => {
@@ -945,9 +961,10 @@ function AppContent() {
 
   if ((isDemoMode && !demoSession) || (!isDemoMode && !isAuthenticated)) {
     return (
-      <div className="app-shell auth-shell">
-        <div className="auth-card">
-          {screen === 'developerIntro' && <DeveloperIntroScreen onSkip={handleDeveloperIntroSkip} />}
+      <LanguageContext.Provider value={selectedLanguage}>
+        <div className="app-shell auth-shell">
+          <div className="auth-card">
+            {screen === 'developerIntro' && <DeveloperIntroScreen onSkip={handleDeveloperIntroSkip} />}
 
           {screen === 'splash' && (
             <SplashScreen
@@ -968,26 +985,28 @@ function AppContent() {
             />
           )}
 
-          {(screen === 'login' || screen === 'register') && (
-            <AuthScreen
-              mode={screen}
-              form={authForm}
-              error={authError}
-              submitting={submitting}
-              onModeChange={(nextMode) => {
-                setAuthMode(nextMode)
-                setScreen(nextMode)
-              }}
-              onFieldChange={handleAuthChange}
-              onSubmit={handleAuthSubmit}
-            />
-          )}
+            {(screen === 'login' || screen === 'register') && (
+              <AuthScreen
+                mode={screen}
+                form={authForm}
+                error={authError}
+                submitting={submitting}
+                onModeChange={(nextMode) => {
+                  setAuthMode(nextMode)
+                  setScreen(nextMode)
+                }}
+                onFieldChange={handleAuthChange}
+                onSubmit={handleAuthSubmit}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      </LanguageContext.Provider>
     )
   }
 
   return (
+    <LanguageContext.Provider value={selectedLanguage}>
     <div className="app-shell app-shell-main">
       <aside className="desktop-sidebar">
         <div className="sidebar-brand">
@@ -1022,7 +1041,7 @@ function AppContent() {
               }}
             >
               <item.icon size={16} />
-              {item.label}
+              {translate(selectedLanguage, item.label)}
             </button>
           ))}
         </nav>
@@ -1260,11 +1279,12 @@ function AppContent() {
         }}
         profileForm={profileForm}
         onProfileChange={setProfileForm}
+        feedbackMessage={settingsFeedback?.message ?? ''}
         onProfileSave={() => {
           if (typeof window !== 'undefined') {
             window.localStorage.setItem('khatapro-profile', JSON.stringify(profileForm))
           }
-          setSettingsFeedback({ type: 'success', message: 'Profile updated successfully.' })
+          setSettingsFeedback({ type: 'success', message: 'Profile saved on this device.' })
         }}
         themeMode={themeMode}
         onThemeChange={setThemeMode}
@@ -1276,11 +1296,8 @@ function AppContent() {
         onToggleCompactLayout={() => setCompactLayout((prev) => !prev)}
         onLogout={async () => {
           if (window.confirm('Are you sure you want to logout?')) {
-            await signOutUser()
-            setScreen('login')
-            setAuthMode('login')
+            await handleLogout()
             setSettingsOpen(false)
-            setToast({ type: 'success', message: 'You have been logged out.' })
           }
         }}
       />
@@ -1312,11 +1329,12 @@ function AppContent() {
             }}
           >
             <item.icon size={18} />
-            <span>{item.label}</span>
+            <span>{translate(selectedLanguage, item.label)}</span>
           </button>
         ))}
       </nav>
     </div>
+    </LanguageContext.Provider>
   )
 }
 
@@ -1471,6 +1489,7 @@ function SplashScreen({
   onLogin: () => void
   demoMode?: boolean
 }) {
+  const t = useTranslator()
   return (
     <div className="screen splash-screen mobile-splash-screen animated fade-up">
       <div className="mobile-app-frame">
@@ -1492,7 +1511,7 @@ function SplashScreen({
           </div>
 
           <h1 className="splash-title">KahaBook</h1>
-          <p className="splash-subtitle">Digital Business Management</p>
+          <p className="splash-subtitle">{t('Digital Business Management')}</p>
 
           <div className="splash-metrics" aria-label="Business metrics preview">
             <div className="metric-card">
@@ -1511,20 +1530,20 @@ function SplashScreen({
             </div>
           </div>
 
-          <div className="splash-progress-wrap" aria-label="Loading app">
+          <div className="splash-progress-wrap" aria-label={t('Loading app')}>
             <div className="splash-progress-bar" />
           </div>
 
           <div className="splash-bottom-row">
             <button type="button" className="primary-button wide-button splash-primary-button" onClick={onGetStarted}>
-              {demoMode ? 'Try Demo' : 'Get Started'}
+              {t(demoMode ? 'Try Demo' : 'Get Started')}
             </button>
             <button type="button" className="text-link login-link splash-login-link" onClick={onLogin}>
-              Login
+              {t('Login')}
             </button>
           </div>
 
-          <div className="splash-status">Setting things up ...</div>
+          <div className="splash-status">{t('Setting things up ...')}</div>
         </div>
       </div>
     </div>
@@ -1548,6 +1567,7 @@ function AuthScreen({
   onFieldChange: (field: keyof typeof form, value: string) => void
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>
 }) {
+  const t = useTranslator()
   return (
     <div className="screen auth-screen auth-screen-reference fade-up">
       <div className="auth-brand-row">
@@ -1562,8 +1582,8 @@ function AuthScreen({
         <span className="auth-brand-name">Khatapro</span>
       </div>
 
-      <div className="auth-subtitle">{mode === 'login' ? 'Welcome back' : 'Create account'}</div>
-      <h3 className="auth-hero-heading">{mode === 'login' ? 'Sign in to KhataPro' : 'Join KhataPro'}</h3>
+      <div className="auth-subtitle">{t(mode === 'login' ? 'Welcome back' : 'Create account')}</div>
+      <h3 className="auth-hero-heading">{t(mode === 'login' ? 'Sign in to KhataPro' : 'Join KhataPro')}</h3>
 
       <div className="auth-toggle">
         <button
@@ -1571,32 +1591,32 @@ function AuthScreen({
           className={`auth-toggle-option ${mode === 'login' ? 'active' : ''}`}
           onClick={() => onModeChange('login')}
         >
-          Login
+          {t('Login')}
         </button>
         <button
           type="button"
           className={`auth-toggle-option ${mode === 'register' ? 'active' : ''}`}
           onClick={() => onModeChange('register')}
         >
-          Register
+          {t('Register')}
         </button>
       </div>
 
       <form className="auth-form" onSubmit={onSubmit}>
         {mode === 'register' && (
           <label className="field">
-            <span>Full name</span>
+            <span>{t('Full name')}</span>
             <input
               type="text"
               value={form.name}
-              placeholder="e.g. Rahul Sharma"
+              placeholder={t('e.g. Rahul Sharma')}
               onChange={(event) => onFieldChange('name', event.target.value)}
             />
           </label>
         )}
 
         <label className="field">
-          <span>Email address</span>
+          <span>{t('Email address')}</span>
           <input
             type="email"
             value={form.email}
@@ -1607,33 +1627,33 @@ function AuthScreen({
 
         {mode === 'register' && (
           <label className="field">
-            <span>Mobile number</span>
+            <span>{t('Mobile number')}</span>
             <input
               type="tel"
               value={form.phone}
-              placeholder="Enter mobile number"
+              placeholder={t('Enter mobile number')}
               onChange={(event) => onFieldChange('phone', event.target.value)}
             />
           </label>
         )}
 
         <label className="field">
-          <span>Password</span>
+          <span>{t('Password')}</span>
           <input
             type="password"
             value={form.password}
-            placeholder={mode === 'login' ? '••••••' : 'Create password'}
+            placeholder={mode === 'login' ? '••••••' : t('Create password')}
             onChange={(event) => onFieldChange('password', event.target.value)}
           />
         </label>
 
         {mode === 'register' && (
           <label className="field">
-            <span>Confirm password</span>
+            <span>{t('Confirm password')}</span>
             <input
               type="password"
               value={form.confirmPassword}
-              placeholder="Confirm password"
+              placeholder={t('Confirm password')}
               onChange={(event) => onFieldChange('confirmPassword', event.target.value)}
             />
           </label>
@@ -1642,7 +1662,7 @@ function AuthScreen({
         {error && <div className="error-banner">{error}</div>}
 
         <button type="submit" className="primary-button wide-button auth-submit-button" disabled={submitting}>
-          {submitting ? 'Please wait…' : mode === 'login' ? 'Login' : 'Create account'}
+          {submitting ? t('Please wait…') : mode === 'login' ? t('Login') : t('Create account')}
         </button>
       </form>
     </div>
@@ -1662,6 +1682,7 @@ function OnboardingScreen({
   onBusinessLogoChange: (event: React.ChangeEvent<HTMLInputElement>) => void
   onCancel: () => void
 }) {
+  const t = useTranslator()
   const previewInitials = 'B'
   return (
     <div className="screen onboarding-screen fade-up">
@@ -1672,30 +1693,30 @@ function OnboardingScreen({
 
       <div className="screen-title-block">
         <div className="tiny-brand">Khatapro</div>
-        <h3>Set up your business</h3>
+        <h3>{t('Set up your business')}</h3>
       </div>
 
       <form className="auth-form" onSubmit={onSubmit}>
         <label className="field">
-          <span>Business Name</span>
-          <input name="businessName" type="text" placeholder="Enter business name" />
+          <span>{t('Business Name')}</span>
+          <input name="businessName" type="text" placeholder={t('Enter business name')} />
         </label>
 
         <label className="field">
-          <span>Business logo (optional)</span>
+          <span>{t('Business logo (optional)')}</span>
           <div className="business-logo-upload-box">
             {businessLogoPreview ? (
               <img src={businessLogoPreview} alt="Business logo preview" className="business-logo-preview-image" />
             ) : (
               <div className="business-logo-placeholder">{previewInitials}</div>
             )}
-            <span>{businessLogoPreview ? 'Change logo' : 'Upload logo'}</span>
+            <span>{t(businessLogoPreview ? 'Change logo' : 'Upload logo')}</span>
           </div>
           <input type="file" accept="image/png,image/jpeg,image/webp" onChange={onBusinessLogoChange} className="business-logo-input" />
         </label>
 
         <label className="field">
-          <span>Business Category</span>
+          <span>{t('Business Category')}</span>
           <select name="category" defaultValue="Retail">
             <option value="Retail">Retail</option>
             <option value="Wholesale">Wholesale</option>
@@ -1704,23 +1725,23 @@ function OnboardingScreen({
         </label>
 
         <label className="field">
-          <span>Address</span>
-          <input name="address" type="text" placeholder="Enter address" />
+          <span>{t('Address')}</span>
+          <input name="address" type="text" placeholder={t('Enter address')} />
         </label>
 
         <div className="multi-field">
           <label className="field">
-            <span>City</span>
-            <input name="city" type="text" placeholder="City" />
+            <span>{t('City')}</span>
+            <input name="city" type="text" placeholder={t('City')} />
           </label>
           <label className="field">
-            <span>State</span>
-            <input name="state" type="text" placeholder="State" />
+            <span>{t('State')}</span>
+            <input name="state" type="text" placeholder={t('State')} />
           </label>
         </div>
 
         <label className="field">
-          <span>Currency</span>
+          <span>{t('Currency')}</span>
           <select name="currency" defaultValue="INR">
             <option value="INR">₹ INR</option>
             <option value="USD">$ USD</option>
@@ -1730,8 +1751,8 @@ function OnboardingScreen({
         {error && <div className="error-banner">{error}</div>}
 
         <div className="form-actions">
-          <button type="button" className="secondary-button" onClick={onCancel}>Cancel</button>
-          <button type="submit" className="primary-button">Continue</button>
+          <button type="button" className="secondary-button" onClick={onCancel}>{t('Cancel')}</button>
+          <button type="submit" className="primary-button">{t('Continue')}</button>
         </div>
       </form>
     </div>
@@ -1956,6 +1977,7 @@ function SettingsDrawer({
   profileForm,
   onProfileChange,
   onProfileSave,
+  feedbackMessage,
   themeMode,
   onThemeChange,
   selectedLanguage,
@@ -1975,6 +1997,7 @@ function SettingsDrawer({
   profileForm: typeof demoProfile
   onProfileChange: React.Dispatch<React.SetStateAction<typeof demoProfile>>
   onProfileSave: () => void
+  feedbackMessage: string
   themeMode: 'light' | 'dark' | 'system'
   onThemeChange: (value: 'light' | 'dark' | 'system') => void
   selectedLanguage: 'en' | 'hi'
@@ -1985,6 +2008,8 @@ function SettingsDrawer({
   onToggleCompactLayout: () => void
   onLogout: () => void
 }) {
+  const t = useTranslator()
+  const [mobileSectionOpen, setMobileSectionOpen] = useState(false)
   const menuItems = [
     { key: 'profile', label: 'My Profile', icon: UserRound, description: 'Account details' },
     { key: 'developer', label: 'Developer Profile', icon: Code2, description: 'App credits' },
@@ -1997,8 +2022,11 @@ function SettingsDrawer({
     { key: 'about', label: 'About KhataPro', icon: Info, description: 'Application details' },
     { key: 'logout', label: 'Logout', icon: LogOut, description: 'Sign out securely' },
   ] as const
+  const activeSectionLabel = menuItems.find((item) => item.key === activeSection)?.label ?? 'Settings'
 
-  const settingsFeedback = null
+  useEffect(() => {
+    if (!open) setMobileSectionOpen(false)
+  }, [open])
 
   const handleProfilePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -2022,8 +2050,8 @@ function SettingsDrawer({
                 <UserRound size={18} />
               </div>
               <div>
-                <p className="settings-eyebrow">Account</p>
-                <h3>My Profile</h3>
+                <p className="settings-eyebrow">{t('Account')}</p>
+                <h3>{t('My Profile')}</h3>
               </div>
             </div>
 
@@ -2032,32 +2060,32 @@ function SettingsDrawer({
                 <div className="profile-avatar-preview">
                   <img src={profileForm.photoURL} alt="Profile" />
                 </div>
-                <span>Upload photo</span>
+                <span>{t('Upload photo')}</span>
                 <input id="settings-profile-upload" type="file" accept="image/*" onChange={handleProfilePhotoUpload} />
               </label>
               <div className="settings-form-grid">
                 <label className="settings-field">
-                  <span>Full name</span>
+                  <span>{t('Full name')}</span>
                   <input value={profileForm.name} onChange={(event) => onProfileChange((prev) => ({ ...prev, name: event.target.value }))} />
                 </label>
                 <label className="settings-field">
-                  <span>Email</span>
+                  <span>{t('Email')}</span>
                   <input type="email" value={profileForm.email} onChange={(event) => onProfileChange((prev) => ({ ...prev, email: event.target.value }))} />
                 </label>
                 <label className="settings-field">
-                  <span>Phone</span>
+                  <span>{t('Phone')}</span>
                   <input value={profileForm.phone} onChange={(event) => onProfileChange((prev) => ({ ...prev, phone: event.target.value }))} />
                 </label>
                 <label className="settings-field">
-                  <span>Photo URL</span>
+                  <span>{t('Photo URL')}</span>
                   <input value={profileForm.photoURL} onChange={(event) => onProfileChange((prev) => ({ ...prev, photoURL: event.target.value }))} />
                 </label>
               </div>
             </div>
 
-            <div className="settings-actions-row">
-              <button type="button" className="secondary-button" onClick={onClose}>Close</button>
-              <button type="button" className="primary-button" onClick={onProfileSave}>Save Profile</button>
+                <div className="settings-actions-row">
+                  {feedbackMessage && <p className="settings-feedback" role="status">{t(feedbackMessage)}</p>}
+                  <button type="button" className="primary-button" onClick={onProfileSave}>{t('Save Profile')}</button>
             </div>
           </div>
         )
@@ -2070,19 +2098,19 @@ function SettingsDrawer({
                 <Code2 size={18} />
               </div>
               <div>
-                <p className="settings-eyebrow">Developer</p>
-                <h3>Developer Profile</h3>
+                <p className="settings-eyebrow">{t('Developer')}</p>
+                <h3>{t('Developer Profile')}</h3>
               </div>
             </div>
 
             <div className="developer-card settings-card">
-              <div className="developer-avatar-ring">
+              <div className="developer-avatar-ring" aria-label="Developer profile photo">
                 <img src={developerProfileImage} alt="Er. Manish Kumar" />
               </div>
               <div className="developer-meta-stack">
-                <span className="developer-badge">Developed by</span>
+                <span className="developer-badge">{t('Developed by')}</span>
                 <h4>Er. Manish Kumar Yadav</h4>
-                <p>Designed this Khatabook</p>
+                <p>{t('Designed this Khatabook')}</p>
               </div>
             </div>
 
@@ -2090,21 +2118,21 @@ function SettingsDrawer({
               <div className="settings-box-row">
                 <span className="settings-box-icon"><Phone size={16} /></span>
                 <div>
-                  <strong>Phone</strong>
+                  <strong>{t('Phone')}</strong>
                   <a href="tel:+916283092662">+91 62830 92662</a>
                 </div>
               </div>
               <div className="settings-box-row">
                 <span className="settings-box-icon"><Mail size={16} /></span>
                 <div>
-                  <strong>Email</strong>
+                  <strong>{t('Email')}</strong>
                   <a href="mailto:manish25er@gmail.com">manish25er@gmail.com</a>
                 </div>
               </div>
               <div className="settings-box-row">
                 <span className="settings-box-icon"><Globe size={16} /></span>
                 <div>
-                  <strong>Portfolio</strong>
+                  <strong>{t('Portfolio')}</strong>
                   <a href="https://roomspot.manish25er.workers.dev/portfolio" target="_blank" rel="noreferrer">roomspot.manish25er.workers.dev/portfolio</a>
                 </div>
               </div>
@@ -2120,8 +2148,8 @@ function SettingsDrawer({
                 <Palette size={18} />
               </div>
               <div>
-                <p className="settings-eyebrow">Customize</p>
-                <h3>Appearance & Theme</h3>
+                <p className="settings-eyebrow">{t('Customize')}</p>
+                <h3>{t('Appearance & Theme')}</h3>
               </div>
             </div>
 
@@ -2132,8 +2160,9 @@ function SettingsDrawer({
                   type="button"
                   className={`theme-option ${themeMode === option ? 'selected' : ''}`}
                   onClick={() => onThemeChange(option)}
+                  aria-pressed={themeMode === option}
                 >
-                  <span className="theme-option-label">{option === 'light' ? 'Light' : option === 'dark' ? 'Dark' : 'System default'}</span>
+                  <span className="theme-option-label">{t(option === 'light' ? 'Light' : option === 'dark' ? 'Dark' : 'System default')}</span>
                   {themeMode === option && <Check size={16} />}
                 </button>
               ))}
@@ -2160,18 +2189,20 @@ function SettingsDrawer({
                 <Languages size={18} />
               </div>
               <div>
-                <p className="settings-eyebrow">Preferences</p>
-                <h3>Language</h3>
+                <p className="settings-eyebrow">{t('Preferences')}</p>
+                <h3>{t('Language')}</h3>
               </div>
             </div>
 
             <div className="theme-options vertical">
+              <p className="settings-language-help">{t('Select your preferred language.')}</p>
               {(['en', 'hi'] as const).map((option) => (
                 <button
                   key={option}
                   type="button"
                   className={`theme-option ${selectedLanguage === option ? 'selected' : ''}`}
                   onClick={() => onLanguageChange(option)}
+                  aria-pressed={selectedLanguage === option}
                 >
                   <span className="theme-option-label">{option === 'en' ? 'English' : 'हिन्दी'}</span>
                   {selectedLanguage === option && <Check size={16} />}
@@ -2189,17 +2220,17 @@ function SettingsDrawer({
                 <Bell size={18} />
               </div>
               <div>
-                <p className="settings-eyebrow">Alerts</p>
-                <h3>Notifications</h3>
+                <p className="settings-eyebrow">{t('Alerts')}</p>
+                <h3>{t('Notifications')}</h3>
               </div>
             </div>
 
             <div className="settings-toggle-card">
               <div>
-                <strong>Push & reminders</strong>
-                <small>Receive reminders, payment alerts, and updates.</small>
+                <strong>{t('Push & reminders')}</strong>
+                <small>{t('Receive reminders, payment alerts, and updates.')}</small>
               </div>
-              <button type="button" className={`switch-toggle ${notificationsEnabled ? 'on' : ''}`} onClick={onToggleNotifications} aria-label="Toggle notifications">
+              <button type="button" className={`switch-toggle ${notificationsEnabled ? 'on' : ''}`} onClick={onToggleNotifications} aria-label={t('Toggle notifications')} aria-pressed={notificationsEnabled}>
                 <span />
               </button>
             </div>
@@ -2214,8 +2245,8 @@ function SettingsDrawer({
                 <ShieldCheck size={18} />
               </div>
               <div>
-                <p className="settings-eyebrow">Security</p>
-                <h3>Privacy & Security</h3>
+                <p className="settings-eyebrow">{t('Security')}</p>
+                <h3>{t('Privacy & Security')}</h3>
               </div>
             </div>
 
@@ -2223,15 +2254,15 @@ function SettingsDrawer({
               <div className="settings-box-row">
                 <span className="settings-box-icon"><ShieldCheck size={16} /></span>
                 <div>
-                  <strong>Account protection</strong>
-                  <small>Protected using Firebase authentication and secure app sessions.</small>
+                  <strong>{t('Account protection')}</strong>
+                  <small>{t('Protected using Firebase authentication and secure app sessions.')}</small>
                 </div>
               </div>
               <div className="settings-box-row muted">
                 <span className="settings-box-icon"><Lock size={16} /></span>
                 <div>
-                  <strong>Password change</strong>
-                  <small>Managed via Firebase account settings when supported by your authentication provider.</small>
+                  <strong>{t('Password change')}</strong>
+                  <small>{t('Managed via Firebase account settings when supported by your authentication provider.')}</small>
                 </div>
               </div>
             </div>
@@ -2246,17 +2277,17 @@ function SettingsDrawer({
                 <SlidersHorizontal size={18} />
               </div>
               <div>
-                <p className="settings-eyebrow">Layout</p>
-                <h3>App Preferences</h3>
+                <p className="settings-eyebrow">{t('Layout')}</p>
+                <h3>{t('App Preferences')}</h3>
               </div>
             </div>
 
             <div className="settings-toggle-card">
               <div>
-                <strong>Compact layout</strong>
-                <small>Reduce spacing for smaller mobile screens.</small>
+                <strong>{t('Compact layout')}</strong>
+                <small>{t('Reduce spacing for smaller mobile screens.')}</small>
               </div>
-              <button type="button" className={`switch-toggle ${compactLayout ? 'on' : ''}`} onClick={onToggleCompactLayout} aria-label="Toggle compact layout">
+              <button type="button" className={`switch-toggle ${compactLayout ? 'on' : ''}`} onClick={onToggleCompactLayout} aria-label={t('Toggle compact layout')} aria-pressed={compactLayout}>
                 <span />
               </button>
             </div>
@@ -2271,8 +2302,8 @@ function SettingsDrawer({
                 <CircleHelp size={18} />
               </div>
               <div>
-                <p className="settings-eyebrow">Support</p>
-                <h3>Help & Support</h3>
+                <p className="settings-eyebrow">{t('Support')}</p>
+                <h3>{t('Help & Support')}</h3>
               </div>
             </div>
 
@@ -2280,14 +2311,14 @@ function SettingsDrawer({
               <div className="settings-box-row">
                 <span className="settings-box-icon"><Mail size={16} /></span>
                 <div>
-                  <strong>Email support</strong>
+                  <strong>{t('Email support')}</strong>
                   <a href="mailto:manish25er@gmail.com">manish25er@gmail.com</a>
                 </div>
               </div>
               <div className="settings-box-row">
                 <span className="settings-box-icon"><Globe size={16} /></span>
                 <div>
-                  <strong>Portfolio</strong>
+                  <strong>{t('Portfolio')}</strong>
                   <a href="https://roomspot.manish25er.workers.dev/portfolio" target="_blank" rel="noreferrer">roomspot.manish25er.workers.dev/portfolio</a>
                 </div>
               </div>
@@ -2303,8 +2334,8 @@ function SettingsDrawer({
                 <Info size={18} />
               </div>
               <div>
-                <p className="settings-eyebrow">Information</p>
-                <h3>About KhataPro</h3>
+                <p className="settings-eyebrow">{t('Information')}</p>
+                <h3>{t('About KhataPro')}</h3>
               </div>
             </div>
 
@@ -2316,7 +2347,7 @@ function SettingsDrawer({
                 </div>
               </div>
               <h4>KhataPro</h4>
-              <p>Digital Business Management</p>
+              <p>{t('Digital Business Management')}</p>
               <small>Version 1.0.0</small>
             </div>
 
@@ -2324,15 +2355,15 @@ function SettingsDrawer({
               <div className="settings-box-row">
                 <span className="settings-box-icon"><FileText size={16} /></span>
                 <div>
-                  <strong>App purpose</strong>
-                  <small>Track customers, payments, balances, and daily business activity.</small>
+                  <strong>{t('App purpose')}</strong>
+                  <small>{t('Track customers, payments, balances, and daily business activity.')}</small>
                 </div>
               </div>
               <div className="settings-box-row">
                 <span className="settings-box-icon"><UserRound size={16} /></span>
                 <div>
-                  <strong>Developer</strong>
-                  <button type="button" className="text-link inline" onClick={() => onSelectSection('developer')}>View developer profile</button>
+                  <strong>{t('Developer')}</strong>
+                  <button type="button" className="text-link inline" onClick={() => onSelectSection('developer')}>{t('View developer profile')}</button>
                 </div>
               </div>
             </div>
@@ -2347,14 +2378,14 @@ function SettingsDrawer({
                 <LogOut size={18} />
               </div>
               <div>
-                <p className="settings-eyebrow">Session</p>
-                <h3>Logout</h3>
+                <p className="settings-eyebrow">{t('Session')}</p>
+                <h3>{t('Logout')}</h3>
               </div>
             </div>
 
             <div className="settings-warning-card">
-              <p>Are you sure you want to sign out from KhataPro?</p>
-              <button type="button" className="primary-button danger" onClick={onLogout}>Log out</button>
+              <p>{t('Are you sure you want to sign out from KhataPro?')}</p>
+              <button type="button" className="primary-button danger" onClick={onLogout}>{t('Log out')}</button>
             </div>
           </div>
         )
@@ -2367,11 +2398,21 @@ function SettingsDrawer({
   return (
     <>
       <div className={`settings-overlay ${open ? 'visible' : ''}`} onClick={onClose} aria-hidden={!open} />
-      <aside className={`settings-drawer ${open ? 'open' : ''}`} aria-label="Settings panel">
+      <aside className={`settings-drawer ${open ? 'open' : ''} ${mobileSectionOpen ? 'settings-drawer--section-open' : ''}`} aria-label="Settings panel">
         <div className="settings-drawer-header">
+          {mobileSectionOpen && (
+            <button
+              type="button"
+              className="settings-back-button"
+              aria-label={t('Back to settings')}
+              onClick={() => setMobileSectionOpen(false)}
+            >
+              <ArrowLeft size={18} />
+            </button>
+          )}
           <div>
-            <p className="settings-drawer-label">Preferences</p>
-            <h3>Settings</h3>
+            <p className="settings-drawer-label">{t('Preferences')}</p>
+            <h3>{t(mobileSectionOpen ? activeSectionLabel : 'Settings')}</h3>
           </div>
           <button type="button" aria-label="Close settings" className="settings-close-button" onClick={onClose}>
             <X size={18} />
@@ -2385,12 +2426,16 @@ function SettingsDrawer({
                 key={key}
                 type="button"
                 className={`settings-menu-item ${activeSection === key ? 'active' : ''}`}
-                onClick={() => onSelectSection(key)}
+                aria-current={activeSection === key ? 'page' : undefined}
+                onClick={() => {
+                  onSelectSection(key)
+                  setMobileSectionOpen(true)
+                }}
               >
                 <span className="settings-menu-icon"><Icon size={17} /></span>
                 <span className="settings-menu-copy">
-                  <strong>{label}</strong>
-                  <small>{description}</small>
+                  <strong>{t(label)}</strong>
+                  <small>{t(description)}</small>
                 </span>
                 <ChevronRight size={16} />
               </button>
@@ -2413,11 +2458,12 @@ function AboutKahaBookScreen({
   onBack: () => void
   onOpenDeveloper: () => void
 }) {
+  const t = useTranslator()
   return (
     <div className="showcase-single-screen">
       <div className="mobile-header green-header">
         <button type="button" className="mobile-nav-button" aria-label="Back" onClick={onBack}><ArrowLeft size={18} /></button>
-        <span>About KahaBook</span>
+        <span>{t('About KhataPro')}</span>
         <span className="header-spacer" />
       </div>
 
@@ -2429,50 +2475,50 @@ function AboutKahaBookScreen({
           </div>
         </div>
         <h3>KahaBook</h3>
-        <p>Simple Accounting<br />for Your Business</p>
+        <p>{t('Simple Accounting for Your Business')}</p>
       </div>
 
       <div className="about-info-list compact-list">
         <div className="about-info-row">
           <span className="info-icon"><FileText size={16} /></span>
           <span className="info-copy">
-            <strong>App Version</strong>
+            <strong>{t('App Version')}</strong>
             <small>1.0.0</small>
           </span>
         </div>
         <div className="about-info-row">
           <span className="info-icon"><FileText size={16} /></span>
           <span className="info-copy">
-            <strong>What&apos;s New</strong>
-            <small>See latest updates</small>
+            <strong>{t("What's New")}</strong>
+            <small>{t('See latest updates')}</small>
           </span>
         </div>
         <div className="about-info-row selected-row" onClick={onOpenDeveloper} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onOpenDeveloper() }}>
           <span className="info-icon"><User size={16} /></span>
           <span className="info-copy">
-            <strong>Developer</strong>
-            <small>Meet the developer</small>
+            <strong>{t('Developer')}</strong>
+            <small>{t('Meet the developer')}</small>
           </span>
         </div>
         <div className="about-info-row">
           <span className="info-icon"><ShieldCheck size={16} /></span>
           <span className="info-copy">
-            <strong>Privacy Policy</strong>
-            <small>Read our privacy policy</small>
+            <strong>{t('Privacy Policy')}</strong>
+            <small>{t('Read our privacy policy')}</small>
           </span>
         </div>
         <div className="about-info-row">
           <span className="info-icon"><FileText size={16} /></span>
           <span className="info-copy">
-            <strong>Terms &amp; Conditions</strong>
-            <small>Read our terms</small>
+            <strong>{t('Terms & Conditions')}</strong>
+            <small>{t('Read our terms')}</small>
           </span>
         </div>
         <div className="about-info-row">
           <span className="info-icon"><Star size={16} /></span>
           <span className="info-copy">
-            <strong>Rate Us</strong>
-            <small>Support us on Play Store</small>
+            <strong>{t('Rate Us')}</strong>
+            <small>{t('Support us on Play Store')}</small>
           </span>
         </div>
       </div>
@@ -2485,11 +2531,12 @@ function DeveloperProfileScreen({
 }: {
   onBack: () => void
 }) {
+  const t = useTranslator()
   return (
     <div className="showcase-single-screen developer-single-screen">
       <div className="mobile-header green-header">
         <button type="button" className="mobile-nav-button" aria-label="Back" onClick={onBack}><ArrowLeft size={18} /></button>
-        <span>Developer</span>
+        <span>{t('Developer')}</span>
         <span className="header-spacer" />
       </div>
 
@@ -2497,34 +2544,34 @@ function DeveloperProfileScreen({
         <div className="developer-avatar-frame">
           <img src={developerProfileImage} alt="Er. Manish Kumar Yadav" className="developer-demo-photo" />
         </div>
-        <div className="developer-bio-label">Developed by</div>
+        <div className="developer-bio-label">{t('Developed by')}</div>
         <h4>Er. Manish Kumar Yadav</h4>
-        <p>Designed this Khatabook</p>
+        <p>{t('Designed this Khatabook')}</p>
       </div>
 
       <div className="mini-quote-card">
-        Building simple and powerful business solutions like KahaBook.
+        {t('Building simple and powerful business solutions like KhataPro.')}
       </div>
 
       <div className="contact-card">
         <div className="contact-row">
           <span className="contact-icon"><Phone size={16} /></span>
           <div>
-            <strong>Phone</strong>
+            <strong>{t('Phone')}</strong>
             <a href="tel:+916283092662" target="_self" rel="noreferrer">+91 62830 92662</a>
           </div>
         </div>
         <div className="contact-row">
           <span className="contact-icon"><Mail size={16} /></span>
           <div>
-            <strong>Email</strong>
+            <strong>{t('Email')}</strong>
             <a href="mailto:manish25er@gmail.com">manish25er@gmail.com</a>
           </div>
         </div>
         <div className="contact-row">
           <span className="contact-icon"><Globe size={16} /></span>
           <div>
-            <strong>Website</strong>
+            <strong>{t('Website')}</strong>
             <a href="https://roomspot.manish25er.workers.dev/portfolio" target="_blank" rel="noreferrer">roomspot.manish25er.workers.dev/portfolio</a>
           </div>
         </div>
@@ -2537,13 +2584,13 @@ function DeveloperProfileScreen({
         </div>
         <div className="contact-row">
           <span className="contact-icon"><MapPin size={16} /></span>
-          <div><strong>Location</strong><small>India</small></div>
+          <div><strong>{t('Location')}</strong><small>{t('India')}</small></div>
         </div>
       </div>
 
       <div className="quote-card">
         <span className="quote-mark">“</span>
-        <p>Passionate about building simple, reliable and user-friendly applications for businesses.</p>
+        <p>{t('Passionate about building simple, reliable and user-friendly applications for businesses.')}</p>
       </div>
     </div>
   )
@@ -2576,6 +2623,7 @@ function DashboardScreen({
   onOpenSettings: () => void
   onLogout: () => void
 }) {
+  const t = useTranslator()
   const businessInitials = (businessName || 'K').split(' ').map((part) => part[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
   return (
     <div className="screen dashboard-screen fade-up">
@@ -2589,16 +2637,16 @@ function DashboardScreen({
           </div>
           <div className="brand-meta">
             <span className="brand-text">KhataPro</span>
-            <small>Dashboard</small>
+            <small>{t('Dashboard')}</small>
           </div>
         </div>
 
         <div className="header-actions">
           <button type="button" className="logout-pill" onClick={onLogout}>
             <LogOut size={14} />
-            Logout
+            {t('Logout')}
           </button>
-          <button type="button" className="icon-button bell-button" aria-label="Notifications">
+          <button type="button" className="icon-button bell-button" aria-label={t('Notifications')}>
             <Bell size={16} />
           </button>
           <button type="button" className="business-header-button" onClick={onOpenSettings} aria-label="Business settings">
@@ -2612,29 +2660,29 @@ function DashboardScreen({
       </header>
 
       <div className="dashboard-greeting">
-        <p className="mini-label light">Good Morning,</p>
+        <p className="mini-label light">{t('Good Morning,')}</p>
         <h3>{customerName}</h3>
         <p className="dashboard-business-name">{businessName}</p>
       </div>
 
       <div className="summary-grid">
         <div className="metric-card">
-          <span>Total Receivable</span>
+          <span>{t('Total Receivable')}</span>
           <strong>{money(summary.totalReceivable)}</strong>
         </div>
         <div className="metric-card danger">
-          <span>Total Payable</span>
+          <span>{t('Total Payable')}</span>
           <strong>{money(summary.totalPayable)}</strong>
         </div>
       </div>
 
       <div className="mini-stat-grid">
         <div className="mini-stat-card">
-          <span>Total Given</span>
+          <span>{t('Total Given')}</span>
           <strong>{money(summary.totalGiven)}</strong>
         </div>
         <div className="mini-stat-card">
-          <span>Total Received</span>
+          <span>{t('Total Received')}</span>
           <strong>{money(summary.totalReceived)}</strong>
         </div>
       </div>
@@ -2642,21 +2690,21 @@ function DashboardScreen({
       <div className="quick-actions-grid">
         <button type="button" className="quick-action green" onClick={onAddCustomer}>
           <UserPlus size={17} />
-          <span>Add Customer</span>
+          <span>{t('Add Customer')}</span>
         </button>
         <button type="button" className="quick-action blue" onClick={onAddTransaction}>
           <Wallet size={17} />
-          <span>Add Transaction</span>
+          <span>{t('Add Transaction')}</span>
         </button>
         <button type="button" className="quick-action gold">
           <Bell size={17} />
-          <span>Send Reminder</span>
+          <span>{t('Send Reminder')}</span>
         </button>
       </div>
 
       <div className="section-header">
-        <h4>All Customers</h4>
-        <button type="button" className="text-link" onClick={onViewCustomers}>View all</button>
+        <h4>{t('All Customers')}</h4>
+        <button type="button" className="text-link" onClick={onViewCustomers}>{t('View all')}</button>
       </div>
 
       <div className="customer-preview-list">
@@ -2673,7 +2721,7 @@ function DashboardScreen({
               </div>
               <div className="customer-preview-right">
                 <strong className={balance >= 0 ? 'positive' : 'negative'}>{balance >= 0 ? '+' : '-'}{money(Math.abs(balance))}</strong>
-                <small>{balance >= 0 ? 'Receivable' : 'Payable'}</small>
+                <small>{t(balance >= 0 ? 'Receivable' : 'Payable')}</small>
               </div>
             </div>
           )
@@ -2681,8 +2729,8 @@ function DashboardScreen({
       </div>
 
       <div className="section-header recent-header">
-        <h4>Recent Transactions</h4>
-        <button type="button" className="text-link" onClick={onViewCustomers}>View all</button>
+        <h4>{t('Recent Transactions')}</h4>
+        <button type="button" className="text-link" onClick={onViewCustomers}>{t('View all')}</button>
       </div>
 
       <div className="txn-list compact">
@@ -2695,11 +2743,11 @@ function DashboardScreen({
               </span>
               <div>
                 <strong>{customer.name}</strong>
-                <small>{balance >= 0 ? 'You received' : 'You gave'}</small>
+                <small>{t(balance >= 0 ? 'You received' : 'You gave')}</small>
               </div>
               <div className="txn-meta">
                 <strong className={balance >= 0 ? 'positive' : 'negative'}>{balance >= 0 ? '+' : '-'}{money(Math.abs(balance))}</strong>
-                <small>Today</small>
+                <small>{t('Today')}</small>
               </div>
             </div>
           )
@@ -2722,6 +2770,7 @@ function CustomersScreen({
   onAddCustomer: () => void
   onBack: () => void
 }) {
+  const t = useTranslator()
   return (
     <div className="screen customers-screen fade-up">
       <header className="panel-header row-between">
@@ -2729,7 +2778,7 @@ function CustomersScreen({
           <button type="button" className="icon-button soft" onClick={onBack}>
             <ChevronRight size={15} style={{ transform: 'rotate(180deg)' }} />
           </button>
-          <h3>Customers</h3>
+          <h3>{t('Customers')}</h3>
         </div>
         <button type="button" className="icon-button soft" onClick={onAddCustomer}>
           <Plus size={15} />
@@ -2738,7 +2787,7 @@ function CustomersScreen({
 
       <div className="search-box">
         <Search size={15} />
-        <input type="text" value="Search by name or phone" readOnly />
+        <input type="text" value={t('Search by name or phone')} readOnly />
       </div>
 
       <div className="customer-list">
@@ -2753,8 +2802,8 @@ function CustomersScreen({
                 <small>{customer.phone}</small>
               </div>
               <div className="customer-balance">
-                <strong className={balance === 0 ? 'settled' : 'due'}>{balance === 0 ? 'Settled' : money(Math.abs(balance))}</strong>
-                <small>{due}</small>
+                <strong className={balance === 0 ? 'settled' : 'due'}>{balance === 0 ? t('Settled') : money(Math.abs(balance))}</strong>
+                <small>{t(due)}</small>
               </div>
               <div className="list-caret" aria-hidden="true">
                 <ChevronRight size={15} />
@@ -2794,6 +2843,7 @@ function KhataScreen({
   onPayAllDue: () => void
   onPaymentAmountChange: (amount: number) => void
 }) {
+  const t = useTranslator()
   const balance = computeCustomerBalance(customer, transactions)
   const dueAmount = Math.max(balance, 0)
 
@@ -2816,9 +2866,9 @@ function KhataScreen({
       </header>
 
       <div className="balance-card-highlight">
-        <span>Current balance</span>
+        <span>{t('Current balance')}</span>
         <strong>{money(Math.abs(balance))}</strong>
-        <small>{balance > 0 ? 'Due' : balance < 0 ? 'You receive' : 'Settled'}</small>
+        <small>{t(balance > 0 ? 'Due' : balance < 0 ? 'You receive' : 'Settled')}</small>
       </div>
 
       {paymentStatus && (paymentStatus.status === 'success' || paymentStatus.status === 'verified') && (
@@ -2834,13 +2884,13 @@ function KhataScreen({
               </svg>
             </div>
 
-            <span className="payment-flash-kicker">Payment received</span>
-            <h4>Payment done</h4>
+            <span className="payment-flash-kicker">{t('Payment received')}</span>
+            <h4>{t('Payment done')}</h4>
             <div className="payment-success-amount">{money(paymentStatus.amount)}</div>
             <small className="payment-success-reference">Ref: {paymentStatus.reference}</small>
 
             <button type="button" className="primary-button payment-success-button" onClick={() => setPaymentStates((prev) => ({ ...prev, [customer.id]: { ...paymentStatus, status: 'verified' } }))}>
-              Done
+              {t('Done')}
             </button>
           </div>
         </div>
@@ -2849,10 +2899,10 @@ function KhataScreen({
       {dueAmount > 0 && (
         <div className="payment-request-card">
           <div className="payment-request-top">
-            <span className="payment-request-label">Pay Pending Amount</span>
+            <span className="payment-request-label">{t('Pay Pending Amount')}</span>
             {paymentStatus && (
               <span className={`payment-status-badge status-${paymentStatus.status}`}>
-                {paymentStatus.status === 'initiated' || paymentStatus.status === 'pending' ? 'In progress' : paymentStatus.status}
+                {paymentStatus.status === 'initiated' || paymentStatus.status === 'pending' ? t('In progress') : paymentStatus.status}
               </span>
             )}
           </div>
@@ -2865,7 +2915,7 @@ function KhataScreen({
           </div>
 
           <label className="payment-input-field">
-            <span>Payment amount</span>
+            <span>{t('Payment amount')}</span>
             <input
               type="number"
               min="1"
@@ -2877,10 +2927,10 @@ function KhataScreen({
 
           <div className="payment-action-row">
             <button type="button" className="primary-button pay-now-button" onClick={() => onPayNow(Math.min(paymentAmount || dueAmount, dueAmount))}>
-              Pay Now
+              {t('Pay Now')}
             </button>
             <button type="button" className="secondary-button pay-all-button" onClick={onPayAllDue}>
-              Pay All Due
+              {t('Pay All Due')}
             </button>
           </div>
 
@@ -2901,9 +2951,9 @@ function KhataScreen({
       )}
 
       <div className="khata-actions">
-        <button type="button" className="action-pill negative" onClick={onAddGiven}>You Gave</button>
-        <button type="button" className="action-pill positive" onClick={onAddReceived}>You Received</button>
-        <button type="button" className="action-pill neutral" onClick={onSendReminder}>Send Reminder</button>
+        <button type="button" className="action-pill negative" onClick={onAddGiven}>{t('You Gave')}</button>
+        <button type="button" className="action-pill positive" onClick={onAddReceived}>{t('You Received')}</button>
+        <button type="button" className="action-pill neutral" onClick={onSendReminder}>{t('Send Reminder')}</button>
       </div>
 
       <div className="transaction-timeline">
@@ -2941,26 +2991,27 @@ function CustomerFormScreen({
   onCancel: () => void
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
 }) {
+  const t = useTranslator()
   return (
     <div className="screen add-form-screen fade-up">
       <header className="transaction-header slim-header">
         <button type="button" className="icon-button soft" onClick={onCancel} aria-label="Back">
           <ChevronRight size={15} style={{ transform: 'rotate(180deg)' }} />
         </button>
-        <h3>Add Customer</h3>
+        <h3>{t('Add Customer')}</h3>
       </header>
 
       <form className="auth-form" onSubmit={onSubmit}>
-        <label className="field"><span>Name</span><input value={form.name} onChange={(event) => onFieldChange({ ...form, name: event.target.value })} placeholder="Enter customer name" /></label>
-        <label className="field"><span>Phone</span><input value={form.phone} onChange={(event) => onFieldChange({ ...form, phone: event.target.value })} placeholder="Enter phone number" /></label>
-        <label className="field"><span>Email</span><input value={form.email} onChange={(event) => onFieldChange({ ...form, email: event.target.value })} placeholder="Enter email" /></label>
-        <label className="field"><span>Address</span><input value={form.address} onChange={(event) => onFieldChange({ ...form, address: event.target.value })} placeholder="Enter address" /></label>
-        <label className="field"><span>Opening Balance</span><input type="number" value={form.openingBalance} onChange={(event) => onFieldChange({ ...form, openingBalance: event.target.value })} /></label>
-        <label className="field"><span>Receivable / Payable</span><select value={form.openingBalanceType} onChange={(event) => onFieldChange({ ...form, openingBalanceType: event.target.value as 'receivable' | 'payable' | 'settled' })}><option value="receivable">Receivable</option><option value="payable">Payable</option><option value="settled">Settled</option></select></label>
-        <label className="field"><span>Notes</span><input value={form.notes} onChange={(event) => onFieldChange({ ...form, notes: event.target.value })} placeholder="Notes (optional)" /></label>
+        <label className="field"><span>{t('Name')}</span><input value={form.name} onChange={(event) => onFieldChange({ ...form, name: event.target.value })} placeholder={t('Enter customer name')} /></label>
+        <label className="field"><span>{t('Phone')}</span><input value={form.phone} onChange={(event) => onFieldChange({ ...form, phone: event.target.value })} placeholder={t('Enter phone number')} /></label>
+        <label className="field"><span>{t('Email')}</span><input value={form.email} onChange={(event) => onFieldChange({ ...form, email: event.target.value })} placeholder={t('Enter email')} /></label>
+        <label className="field"><span>{t('Address')}</span><input value={form.address} onChange={(event) => onFieldChange({ ...form, address: event.target.value })} placeholder={t('Enter address')} /></label>
+        <label className="field"><span>{t('Opening Balance')}</span><input type="number" value={form.openingBalance} onChange={(event) => onFieldChange({ ...form, openingBalance: event.target.value })} /></label>
+        <label className="field"><span>{t('Receivable / Payable')}</span><select value={form.openingBalanceType} onChange={(event) => onFieldChange({ ...form, openingBalanceType: event.target.value as 'receivable' | 'payable' | 'settled' })}><option value="receivable">{t('Receivable')}</option><option value="payable">{t('Payable')}</option><option value="settled">{t('Settled')}</option></select></label>
+        <label className="field"><span>{t('Notes')}</span><input value={form.notes} onChange={(event) => onFieldChange({ ...form, notes: event.target.value })} placeholder={t('Notes (optional)')} /></label>
         <div className="form-actions">
-          <button type="button" className="secondary-button" onClick={onCancel}>Cancel</button>
-          <button type="submit" className="primary-button">Save Customer</button>
+          <button type="button" className="secondary-button" onClick={onCancel}>{t('Cancel')}</button>
+          <button type="submit" className="primary-button">{t('Save Customer')}</button>
         </div>
       </form>
     </div>
@@ -2980,6 +3031,7 @@ function TransactionFormScreen({
   onCancel: () => void
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
 }) {
+  const t = useTranslator()
   const paymentOptions: Array<{ value: string; label: string; icon: string }> = [
     { value: 'cash', label: 'Cash', icon: '₹' },
     { value: 'upi', label: 'UPI', icon: '✦' },
@@ -2997,7 +3049,7 @@ function TransactionFormScreen({
           <ChevronRight size={15} style={{ transform: 'rotate(180deg)' }} />
         </button>
         <div className="transaction-header-copy">
-          <h3>Add Transaction</h3>
+          <h3>{t('Add Transaction')}</h3>
           <strong>{customerName}</strong>
         </div>
       </header>
@@ -3009,19 +3061,19 @@ function TransactionFormScreen({
             className={`toggle-option ${form.type === 'given' ? 'active' : ''}`}
             onClick={() => onFieldChange({ ...form, type: 'given' })}
           >
-            You Gave
+            {t('You Gave')}
           </button>
           <button
             type="button"
             className={`toggle-option ${form.type === 'received' ? 'active' : ''}`}
             onClick={() => onFieldChange({ ...form, type: 'received' })}
           >
-            You Received
+            {t('You Received')}
           </button>
         </div>
 
         <label className="field amount-field">
-          <span>Amount</span>
+          <span>{t('Amount')}</span>
           <div className="amount-input-wrap">
             <span className="currency-sign">₹</span>
             <input type="number" value={form.amount} onChange={(event) => onFieldChange({ ...form, amount: event.target.value })} placeholder="0" />
@@ -3029,12 +3081,12 @@ function TransactionFormScreen({
         </label>
 
         <label className="field">
-          <span>Description</span>
-          <input value={form.description} onChange={(event) => onFieldChange({ ...form, description: event.target.value })} placeholder="Enter description" />
+          <span>{t('Description')}</span>
+          <input value={form.description} onChange={(event) => onFieldChange({ ...form, description: event.target.value })} placeholder={t('Enter description')} />
         </label>
 
         <div className="field payment-block">
-          <span>Payment Method</span>
+          <span>{t('Payment Method')}</span>
           <div className="payment-grid">
             {paymentOptions.map((option) => (
               <button
@@ -3044,24 +3096,24 @@ function TransactionFormScreen({
                 onClick={() => onFieldChange({ ...form, paymentMethod: option.value as typeof form.paymentMethod })}
               >
                 <span className="payment-icon">{option.icon}</span>
-                <span>{option.label}</span>
+                <span>{t(option.label)}</span>
               </button>
             ))}
           </div>
         </div>
 
         <label className="field">
-          <span>Date</span>
+          <span>{t('Date')}</span>
           <input type="date" value={form.date} onChange={(event) => onFieldChange({ ...form, date: event.target.value })} />
         </label>
 
         <label className="field">
-          <span>Notes (Optional)</span>
-          <input value={form.notes} onChange={(event) => onFieldChange({ ...form, notes: event.target.value })} placeholder="Enter notes" />
+          <span>{t('Notes (Optional)')}</span>
+          <input value={form.notes} onChange={(event) => onFieldChange({ ...form, notes: event.target.value })} placeholder={t('Enter notes')} />
         </label>
 
         <div className="form-actions transaction-actions">
-          <button type="submit" className="primary-button wide-button">Save Transaction</button>
+          <button type="submit" className="primary-button wide-button">{t('Save Transaction')}</button>
         </div>
       </form>
     </div>
@@ -3089,10 +3141,11 @@ function LoanOfferPopup({
   onCheckEligibility: () => void
   onClose: () => void
 }) {
+  const t = useTranslator()
   return (
     <div className="loan-offer-backdrop" onClick={onClose}>
       <div className="loan-offer-modal" onClick={(event) => event.stopPropagation()}>
-        <button type="button" className="loan-close-button" aria-label="Close offer" onClick={onClose}>×</button>
+        <button type="button" className="loan-close-button" aria-label={t('Close offer')} onClick={onClose}>×</button>
 
         <div className="loan-offer-illustration" aria-hidden="true">
           <div className="offer-coin">₹</div>
@@ -3100,14 +3153,14 @@ function LoanOfferPopup({
           <div className="offer-chart" />
         </div>
 
-        <div className="loan-offer-headline">Business Loan</div>
-        <h3 className="loan-offer-title">You may be eligible for</h3>
+        <div className="loan-offer-headline">{t('Business Loan')}</div>
+        <h3 className="loan-offer-title">{t('You may be eligible for')}</h3>
         <div className="loan-offer-amount">up to ₹{offer.maxAmount.toLocaleString('en-IN')}</div>
-        <p className="loan-offer-subtitle">Grow your business with quick and flexible financing.</p>
+        <p className="loan-offer-subtitle">{t('Grow your business with quick and flexible financing.')}</p>
 
         <div className="loan-offer-actions">
-          <button type="button" className="primary-button loan-check-button" onClick={onCheckEligibility}>Check Eligibility</button>
-          <button type="button" className="secondary-button loan-maybe-button" onClick={onClose}>Maybe Later</button>
+          <button type="button" className="primary-button loan-check-button" onClick={onCheckEligibility}>{t('Check Eligibility')}</button>
+          <button type="button" className="secondary-button loan-maybe-button" onClick={onClose}>{t('Maybe Later')}</button>
         </div>
       </div>
     </div>
@@ -3125,6 +3178,7 @@ function LoanOfferListScreen({
   onOpenOffer: () => void
   onBack: () => void
 }) {
+  const t = useTranslator()
   return (
     <div className="screen loan-screen fade-up">
       <header className="panel-header row-between">
@@ -3132,23 +3186,23 @@ function LoanOfferListScreen({
           <button type="button" className="icon-button soft" onClick={onBack}>
             <ChevronRight size={15} style={{ transform: 'rotate(180deg)' }} />
           </button>
-          <h3>Loans</h3>
+          <h3>{t('Loans')}</h3>
         </div>
       </header>
 
       <div className="loan-overview-card">
         <div className="loan-overview-top">
-          <span className="loan-pill">Available Offer</span>
+          <span className="loan-pill">{t('Available Offer')}</span>
           <span className="loan-provider">{offer.providerName}</span>
         </div>
         <h4>{offer.title}</h4>
         <p className="loan-overview-copy">{offer.subtitle}</p>
-        <button type="button" className="primary-button loan-cta" onClick={onOpenOffer}>View Offer</button>
+        <button type="button" className="primary-button loan-cta" onClick={onOpenOffer}>{t('View Offer')}</button>
       </div>
 
       <div className="loan-info-box">
         <strong>{businessName}</strong>
-        <span>Business financing support may be available based on verified partner eligibility.</span>
+        <span>{t('Business financing support may be available based on verified partner eligibility.')}</span>
       </div>
     </div>
   )
@@ -3171,6 +3225,7 @@ function LoanDetailScreen({
   onBack: () => void
   onContinue: () => void
 }) {
+  const t = useTranslator()
   const monthMap: Record<'3 Months' | '6 Months' | '12 Months', number> = {
     '3 Months': 1.08,
     '6 Months': 1.12,
@@ -3187,7 +3242,7 @@ function LoanDetailScreen({
           <button type="button" className="icon-button soft" onClick={onBack}>
             <ChevronRight size={15} style={{ transform: 'rotate(180deg)' }} />
           </button>
-          <h3>Loan Offer</h3>
+          <h3>{t('Loan Offer')}</h3>
         </div>
       </header>
 
@@ -3198,7 +3253,7 @@ function LoanDetailScreen({
       </div>
 
       <div className="loan-option-block">
-        <div className="loan-block-label">Choose Loan Amount</div>
+        <div className="loan-block-label">{t('Choose Loan Amount')}</div>
         <div className="loan-chip-grid">
           {[25000, 40000, 50000].map((amount) => (
             <button
@@ -3214,7 +3269,7 @@ function LoanDetailScreen({
       </div>
 
       <div className="loan-option-block">
-        <div className="loan-block-label">Choose Tenure</div>
+        <div className="loan-block-label">{t('Choose Tenure')}</div>
         <div className="loan-chip-grid">
           {(['3 Months', '6 Months', '12 Months'] as const).map((option) => (
             <button
@@ -3223,23 +3278,23 @@ function LoanDetailScreen({
               className={`loan-chip ${tenure === option ? 'selected' : ''}`}
               onClick={() => onSelectTenure(option)}
             >
-              {option}
+              {t(option)}
             </button>
           ))}
         </div>
       </div>
 
       <div className="loan-summary-card">
-        <div className="summary-row"><span>Estimated repayment</span><strong>₹{estimate.toLocaleString('en-IN')}</strong></div>
-        <div className="summary-row"><span>Interest / charges</span><strong>Indicative only</strong></div>
-        <div className="summary-row"><span>Monthly estimate</span><strong>₹{monthly.toLocaleString('en-IN')}</strong></div>
+        <div className="summary-row"><span>{t('Estimated repayment')}</span><strong>₹{estimate.toLocaleString('en-IN')}</strong></div>
+        <div className="summary-row"><span>{t('Interest / charges')}</span><strong>{t('Indicative only')}</strong></div>
+        <div className="summary-row"><span>{t('Monthly estimate')}</span><strong>₹{monthly.toLocaleString('en-IN')}</strong></div>
       </div>
 
       <div className="loan-terms-box">
-        <p>Eligibility decisions are made by the partner lender or backend provider. This page is a pre-check and not a final approval.</p>
+        <p>{t('Eligibility decisions are made by the partner lender or backend provider. This page is a pre-check and not a final approval.')}</p>
       </div>
 
-      <button type="button" className="primary-button full-width" onClick={onContinue}>Continue</button>
+      <button type="button" className="primary-button full-width" onClick={onContinue}>{t('Continue')}</button>
     </div>
   )
 }
@@ -3269,6 +3324,7 @@ function LoanApplicationScreen({
   onBack: () => void
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>
 }) {
+  const t = useTranslator()
   return (
     <div className="screen loan-application-screen fade-up">
       <header className="panel-header row-between">
@@ -3276,13 +3332,13 @@ function LoanApplicationScreen({
           <button type="button" className="icon-button soft" onClick={onBack}>
             <ChevronRight size={15} style={{ transform: 'rotate(180deg)' }} />
           </button>
-          <h3>Loan Application</h3>
+          <h3>{t('Loan Application')}</h3>
         </div>
       </header>
 
       <div className="loan-application-card">
         <div className="application-summary-head">
-          <span>Request</span>
+          <span>{t('Request')}</span>
           <strong>₹{amount.toLocaleString('en-IN')}</strong>
         </div>
         <div className="application-summary-meta">{tenure} • {businessName}</div>
@@ -3290,37 +3346,37 @@ function LoanApplicationScreen({
 
       <form className="auth-form loan-form" onSubmit={onSubmit}>
         <label className="field">
-          <span>Full Name</span>
+          <span>{t('Full Name')}</span>
           <input value={form.fullName} onChange={(event) => onFieldChange({ ...form, fullName: event.target.value })} />
         </label>
         <label className="field">
-          <span>Mobile Number</span>
+          <span>{t('Mobile Number')}</span>
           <input value={form.mobileNumber} onChange={(event) => onFieldChange({ ...form, mobileNumber: event.target.value })} />
         </label>
         <label className="field">
-          <span>Business Name</span>
+          <span>{t('Business Name')}</span>
           <input value={form.businessName} onChange={(event) => onFieldChange({ ...form, businessName: event.target.value })} />
         </label>
         <label className="field">
-          <span>Business Category</span>
+          <span>{t('Business Category')}</span>
           <input value={form.businessCategory} onChange={(event) => onFieldChange({ ...form, businessCategory: event.target.value })} />
         </label>
         <label className="field">
-          <span>Business Address</span>
+          <span>{t('Business Address')}</span>
           <textarea value={form.businessAddress} onChange={(event) => onFieldChange({ ...form, businessAddress: event.target.value })} rows={3} />
         </label>
         <label className="field">
-          <span>Loan Amount</span>
+          <span>{t('Loan Amount')}</span>
           <input value={form.loanAmount} onChange={(event) => onFieldChange({ ...form, loanAmount: event.target.value })} />
         </label>
         <label className="field">
-          <span>Purpose of Loan</span>
+          <span>{t('Purpose of Loan')}</span>
           <input value={form.purpose} onChange={(event) => onFieldChange({ ...form, purpose: event.target.value })} />
         </label>
 
         <div className="form-actions">
-          <button type="button" className="secondary-button" onClick={onBack}>Back</button>
-          <button type="submit" className="primary-button">Submit Application</button>
+          <button type="button" className="secondary-button" onClick={onBack}>{t('Back')}</button>
+          <button type="submit" className="primary-button">{t('Submit Application')}</button>
         </div>
       </form>
     </div>
@@ -3338,6 +3394,7 @@ function PaymentSuccessScreen({
   reference: string
   onDone: () => void
 }) {
+  const t = useTranslator()
   const usdAmount = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(amount)
 
   useEffect(() => {
@@ -3397,7 +3454,7 @@ function PaymentSuccessScreen({
         </div>
       </div>
 
-      <h1 className="payment-title">Seamless<br />Transactions</h1>
+      <h1 className="payment-title">{t('Seamless Transactions')}</h1>
 
       <div className="success-card">
         <div className="success-badge-wrap">
@@ -3408,14 +3465,14 @@ function PaymentSuccessScreen({
           </div>
         </div>
 
-        <h2>Success</h2>
-        <p>{type === 'given' ? 'Payment Sent!' : 'Payment Received!'}</p>
+        <h2>{t('Success')}</h2>
+        <p>{t(type === 'given' ? 'Payment Sent!' : 'Payment Received!')}</p>
         <div className="success-amount">{usdAmount}</div>
 
-        <button type="button" className="success-primary-button" onClick={onDone}>Done</button>
+        <button type="button" className="success-primary-button" onClick={onDone}>{t('Done')}</button>
 
         <div className="success-reference-row">
-          <span>Transaction Reference</span>
+          <span>{t('Transaction Reference')}</span>
           <strong>{reference}</strong>
         </div>
       </div>
@@ -3438,6 +3495,7 @@ function ProfileScreen({
   onSave: () => void
   onBack: () => void
 }) {
+  const t = useTranslator()
   return (
     <div className="screen profile-screen fade-up">
       <header className="panel-header row-between">
@@ -3445,7 +3503,7 @@ function ProfileScreen({
           <button type="button" className="icon-button soft" onClick={onBack}>
             <ChevronRight size={15} style={{ transform: 'rotate(180deg)' }} />
           </button>
-          <h3>Profile</h3>
+          <h3>{t('Profile')}</h3>
         </div>
       </header>
 
@@ -3456,7 +3514,7 @@ function ProfileScreen({
           ) : (
             <div className="avatar-badge large">{profile.name.charAt(0)}</div>
           )}
-          <span>Upload photo</span>
+          <span>{t('Upload photo')}</span>
         </label>
         <input id="profile-image-upload" type="file" accept="image/*" onChange={onImageChange} hidden />
 
@@ -3468,20 +3526,20 @@ function ProfileScreen({
 
       <div className="auth-form profile-form">
         <label className="field">
-          <span>Name</span>
+          <span>{t('Name')}</span>
           <input value={profile.name} onChange={(event) => onFieldChange({ ...profile, name: event.target.value })} />
         </label>
         <label className="field">
-          <span>Email</span>
+          <span>{t('Email')}</span>
           <input value={profile.email} onChange={(event) => onFieldChange({ ...profile, email: event.target.value })} />
         </label>
         <label className="field">
-          <span>Phone</span>
+          <span>{t('Phone')}</span>
           <input value={profile.phone} onChange={(event) => onFieldChange({ ...profile, phone: event.target.value })} />
         </label>
         <div className="form-actions">
-          <button type="button" className="secondary-button" onClick={onBack}>Cancel</button>
-          <button type="button" className="primary-button" onClick={onSave}>Save Profile</button>
+          <button type="button" className="secondary-button" onClick={onBack}>{t('Cancel')}</button>
+          <button type="button" className="primary-button" onClick={onSave}>{t('Save Profile')}</button>
         </div>
       </div>
     </div>
