@@ -7,7 +7,7 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0a5d4a",
+  "background_color": "#F7F9FA",
   "theme_color": "#16A085",
   "categories": ["business", "finance", "productivity"],
   "lang": "en-IN",

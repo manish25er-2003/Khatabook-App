@@ -95,11 +95,24 @@ type PaymentState = {
   createdAt: string
 }
 
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+}
+
 const LanguageContext = createContext<SupportedLanguage>('en')
 
 function useTranslator() {
   const language = useContext(LanguageContext)
   return (text: string) => translate(language, text)
+}
+
+function InstallAppButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" className="install-app-button" onClick={onClick}>
+      Install KhataPro
+    </button>
+  )
 }
 
 const computeCustomerBalance = (customer: Customer, transactions: CustomerTransaction[]) => {
@@ -185,7 +198,7 @@ function AppContent() {
   const [loanApplication, setLoanApplication] = useState<LoanApplication | null>(null)
   const [paymentStates, setPaymentStates] = useState<Record<string, PaymentState>>({})
   const [paymentDrafts, setPaymentDrafts] = useState<Record<string, number>>({})
-  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null)
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null)
   const [showInstallButton, setShowInstallButton] = useState(false)
   const [isStandaloneMode, setIsStandaloneMode] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -405,15 +418,9 @@ function AppContent() {
   }, [isDemoMode, business, customers, transactionsByCustomer, profileForm])
 
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => undefined)
-      })
-    }
-
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault()
-      setInstallPromptEvent(event)
+      setInstallPromptEvent(event as BeforeInstallPromptEvent)
       setShowInstallButton(true)
     }
 
@@ -423,8 +430,14 @@ function AppContent() {
     }
 
     const mediaQuery = window.matchMedia('(display-mode: standalone)')
-    const syncStandaloneState = () => setIsStandaloneMode(mediaQuery.matches)
+    const isIOSStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+    const syncStandaloneState = () => setIsStandaloneMode(mediaQuery.matches || isIOSStandalone)
     syncStandaloneState()
+    setShowInstallButton(
+      !mediaQuery.matches
+      && !isIOSStandalone
+      && (window.isSecureContext || ['localhost', '127.0.0.1'].includes(window.location.hostname)),
+    )
 
     if (typeof mediaQuery.addEventListener === 'function') {
       mediaQuery.addEventListener('change', syncStandaloneState)
@@ -871,14 +884,27 @@ function AppContent() {
   }
 
   const handleInstallApp = async () => {
-    if (!installPromptEvent) return
-
-    installPromptEvent.prompt()
-    const choice = await installPromptEvent.userChoice
-    if (choice.outcome === 'accepted') {
-      setShowInstallButton(false)
+    if (installPromptEvent) {
+      const promptEvent = installPromptEvent
+      setInstallPromptEvent(null)
+      try {
+        await promptEvent.prompt()
+        const choice = await promptEvent.userChoice
+        if (choice.outcome === 'accepted') {
+          setShowInstallButton(false)
+        }
+      } catch (error) {
+        console.error('KhataPro install prompt failed:', error)
+        window.alert('KhataPro could not open the install prompt. Open your browser menu and choose "Install app" or "Add to Home screen".')
+      }
+      return
     }
-    setInstallPromptEvent(null)
+
+    const isIOS = /iPad|iPhone|iPod/.test(window.navigator.userAgent)
+    const instructions = isIOS
+      ? 'To add KhataPro on iPhone or iPad, tap Share in Safari, then choose "Add to Home Screen".'
+      : 'To install KhataPro, open your browser menu (⋮) and choose "Install app" or "Add to Home screen". If the option is missing, use Chrome and make sure this site is open over HTTPS.'
+    window.alert(instructions)
   }
 
   const handleLogout = async () => {
@@ -1000,6 +1026,7 @@ function AppContent() {
               />
             )}
           </div>
+          {!isStandaloneMode && showInstallButton && <InstallAppButton onClick={() => void handleInstallApp()} />}
         </div>
       </LanguageContext.Provider>
     )
@@ -1258,11 +1285,7 @@ function AppContent() {
 
       {toast && <div className={`floating-toast ${toast.type}`}>{toast.message}</div>}
 
-      {!isStandaloneMode && showInstallButton && (
-        <button type="button" className="install-app-button" onClick={handleInstallApp}>
-          Install KhataPro App
-        </button>
-      )}
+      {!isStandaloneMode && showInstallButton && <InstallAppButton onClick={() => void handleInstallApp()} />}
 
       <SettingsDrawer
         open={settingsOpen}

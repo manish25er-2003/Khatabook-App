@@ -1,4 +1,5 @@
-const CACHE_NAME = 'khatapro-cache-v2'
+const CACHE_NAME = 'khatapro-cache-v3'
+const CACHE_PREFIX = 'khatapro-cache-'
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -19,60 +20,54 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key)),
-      ),
-    ).then(() => self.clients.claim()),
-  )
+  event.waitUntil(caches.keys().then(async (keys) => {
+    await Promise.all(
+      keys
+        .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+        .map((key) => caches.delete(key)),
+    )
+    await self.clients.claim()
+  }))
 })
 
 self.addEventListener('fetch', (event) => {
   const { request } = event
 
-  if (request.method !== 'GET') {
+  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) {
     return
   }
 
-  if (request.url.startsWith('chrome-extension://') || request.url.startsWith('moz-extension://')) {
+  if (request.mode !== 'navigate' && !['script', 'style', 'image', 'font'].includes(request.destination)) {
     return
   }
 
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
-        .then((response) => {
-          const copy = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy))
+        .then(async (response) => {
+          if (response.ok) {
+            const cache = await caches.open(CACHE_NAME)
+            await cache.put(request, response.clone())
+          }
           return response
         })
-        .catch(() => caches.match('/offline.html'))
-        .catch(() => caches.match('/index.html')),
+        .catch(async () => (await caches.match(request)) ?? (await caches.match('/offline.html'))),
     )
     return
   }
 
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
+    caches.match(request).then(async (cachedResponse) => {
       if (cachedResponse) {
         return cachedResponse
       }
 
-      return fetch(request)
-        .then((response) => {
-          const copy = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy))
-          return response
-        })
-        .catch(() => {
-          if (request.destination === 'image' || request.destination === 'script' || request.destination === 'style') {
-            return caches.match('/icon.svg')
+      return fetch(request).then(async (response) => {
+          if (response.ok) {
+            const cache = await caches.open(CACHE_NAME)
+            await cache.put(request, response.clone())
           }
-
-          return caches.match('/offline.html')
+          return response
         })
     }),
   )
