@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownLeft,
   ArrowLeft,
@@ -11,6 +11,8 @@ import {
   CircleHelp,
   Code2,
   CreditCard,
+  Eye,
+  EyeOff,
   FileText,
   Globe,
   Info,
@@ -41,8 +43,8 @@ import './App.css'
 import developerProfileImage from './assets/developer/manish-kumar-optimized.jpg'
 import { firebaseDb, isFirebaseConfigured } from './firebase/config'
 import { AuthProvider, useAuthContext } from './contexts/AuthContext'
-import { signInUser, signOutUser, signUpUser } from './services/authService'
-import { createBusiness, getBusiness } from './services/businessService'
+import { requestPasswordReset, signInUser, signOutUser, signUpUser } from './services/authService'
+import { createBusiness, getBusiness, getBusinessesForUser } from './services/businessService'
 import { createCustomer, getCustomers } from './services/customerService'
 import { storageService } from './services/storageService'
 import { createTransaction, getCustomerTransactions } from './services/transactionService'
@@ -136,14 +138,18 @@ function App() {
 }
 
 function AppContent() {
-  const { currentUser, profile, loading, isAuthenticated } = useAuthContext()
+  const { currentUser, profile, loading, isAuthenticated, updateProfile } = useAuthContext()
   const isDemoMode = !isFirebaseConfigured
   const [demoSession, setDemoSession] = useState(false)
-  const [screen, setScreen] = useState<'developerIntro' | 'splash' | 'register' | 'login' | 'onboarding' | 'dashboard' | 'customers' | 'khata' | 'addCustomer' | 'addTransaction' | 'paymentSuccess' | 'suppliers' | 'reports' | 'profile' | 'settings' | 'about' | 'developerProfile' | 'loans' | 'loanDetail' | 'loanApplication'>(() => 'developerIntro')
+  const [screen, setScreen] = useState<'developerIntro' | 'splash' | 'register' | 'login' | 'forgotPassword' | 'onboarding' | 'dashboard' | 'customers' | 'khata' | 'addCustomer' | 'addTransaction' | 'paymentSuccess' | 'suppliers' | 'reports' | 'profile' | 'settings' | 'about' | 'developerProfile' | 'loans' | 'loanDetail' | 'loanApplication'>(() => 'developerIntro')
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
   const [authForm, setAuthForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' })
   const [authError, setAuthError] = useState('')
+  const [resetFeedback, setResetFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [onboardingSubmitting, setOnboardingSubmitting] = useState(false)
+  const authSubmitInFlight = useRef(false)
+  const onboardingSubmitInFlight = useRef(false)
   const [business, setBusiness] = useState<Business | null>(() => {
     if (typeof window === 'undefined' || !isDemoMode) return null
     const raw = window.localStorage.getItem('khatapro-demo-business')
@@ -393,7 +399,7 @@ function AppContent() {
     if (loading) return
 
     if (!isAuthenticated) {
-      if (screen !== 'developerIntro' && screen !== 'splash' && screen !== 'login' && screen !== 'register') {
+      if (screen !== 'developerIntro' && screen !== 'splash' && screen !== 'login' && screen !== 'register' && screen !== 'forgotPassword') {
         setScreen('splash')
       }
       return
@@ -614,6 +620,22 @@ function AppContent() {
 
   const handleAuthSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (authSubmitInFlight.current) return
+
+    if (authMode === 'register') {
+      if (!authForm.name.trim() || !authForm.phone.trim()) {
+        setAuthError('Enter your name and phone number to create an account.')
+        return
+      }
+      if (authForm.password.length < 6) {
+        setAuthError('Password must be at least 6 characters.')
+        return
+      }
+      if (authForm.password !== authForm.confirmPassword) {
+        setAuthError('Passwords do not match.')
+        return
+      }
+    }
 
     if (isDemoMode) {
       if (authMode === 'register') {
@@ -634,18 +656,12 @@ function AppContent() {
     }
 
     if (!isFirebaseConfigured) {
-      setAuthError('Add your Firebase environment values before using signup or login.')
+      setAuthError('Firebase is not configured. Add the VITE_FIREBASE_* environment values before using account features.')
       return
     }
 
-    if (authMode === 'register') {
-      if (authForm.password !== authForm.confirmPassword) {
-        setAuthError('Passwords do not match.')
-        return
-      }
-    }
-
     setAuthError('')
+    authSubmitInFlight.current = true
     setSubmitting(true)
 
     try {
@@ -686,62 +702,147 @@ function AppContent() {
         setScreen('dashboard')
       }
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Authentication failed. Please try again.')
+      const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''
+      const messages: Record<string, string> = {
+        'auth/email-already-in-use': 'An account already exists for this email. Please sign in instead.',
+        'auth/invalid-email': 'Enter a valid email address.',
+        'auth/invalid-credential': 'Email or password is incorrect.',
+        'auth/user-not-found': 'Email or password is incorrect.',
+        'auth/wrong-password': 'Email or password is incorrect.',
+        'auth/weak-password': 'Choose a stronger password with at least 6 characters.',
+        'auth/network-request-failed': 'Network error. Check your connection and try again.',
+      }
+      setAuthError(messages[code] ?? 'Authentication failed. Please try again.')
     } finally {
+      authSubmitInFlight.current = false
+      setSubmitting(false)
+    }
+  }
+
+  const handlePasswordResetSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (authSubmitInFlight.current) return
+
+    const email = authForm.email.trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setResetFeedback({ type: 'error', message: 'Enter a valid email address.' })
+      return
+    }
+    if (!isFirebaseConfigured) {
+      setResetFeedback({
+        type: 'error',
+        message: 'Password reset is unavailable because Firebase is not configured. Set the VITE_FIREBASE_* environment values and enable Email/Password sign-in in Firebase Authentication.',
+      })
+      return
+    }
+
+    authSubmitInFlight.current = true
+    setSubmitting(true)
+    setResetFeedback(null)
+    try {
+      await requestPasswordReset(email)
+      setResetFeedback({
+        type: 'success',
+        message: 'If an account exists for this email, a reset link should arrive shortly. Check your inbox and spam folder.',
+      })
+    } catch (error) {
+      const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''
+      const messages: Record<string, string> = {
+        'auth/invalid-email': 'Enter a valid email address.',
+        'auth/network-request-failed': 'Network error. Check your connection and try again.',
+        'auth/too-many-requests': 'Too many reset attempts. Wait a while and try again.',
+        'auth/operation-not-allowed': 'Password reset is not enabled. Enable Email/Password sign-in in Firebase Authentication.',
+      }
+      if (code === 'auth/user-not-found') {
+        setResetFeedback({
+          type: 'success',
+          message: 'If an account exists for this email, a reset link should arrive shortly. Check your inbox and spam folder.',
+        })
+      } else {
+        setResetFeedback({ type: 'error', message: messages[code] ?? 'Could not send the reset email. Check Firebase Authentication email settings and try again.' })
+      }
+    } finally {
+      authSubmitInFlight.current = false
       setSubmitting(false)
     }
   }
 
   const handleOnboardingSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!currentUser || !profile) return
-
-    const form = new FormData(event.currentTarget)
-    const businessName = String(form.get('businessName') || '')
-    const category = String(form.get('category') || 'Retail')
-    const address = String(form.get('address') || '')
-    const city = String(form.get('city') || '')
-    const state = String(form.get('state') || '')
-    const currency = String(form.get('currency') || 'INR')
-
-    if (!businessName.trim()) {
-      setAuthError('Business name is required.')
+    if (onboardingSubmitInFlight.current) return
+    if (!currentUser || !profile || !firebaseDb) {
+      setAuthError('Your account session is not ready. Sign in again before setting up your business.')
       return
     }
 
-    try {
-      let businessLogoUrl = business?.logoUrl || ''
+    const form = new FormData(event.currentTarget)
+    const businessName = String(form.get('businessName') || '').trim()
+    const category = String(form.get('category') || '')
+    const address = String(form.get('address') || '').trim()
+    const city = String(form.get('city') || '').trim()
+    const state = String(form.get('state') || '').trim()
+    const currency = String(form.get('currency') || '')
 
-      if (businessLogoFile) {
+    if (!businessName || !category || !address || !city || !state || !currency) {
+      setAuthError('Complete all required business fields before continuing.')
+      return
+    }
+    if (!['Retail', 'Wholesale', 'Services'].includes(category) || !['INR', 'USD'].includes(currency)) {
+      setAuthError('Choose a valid business category and currency.')
+      return
+    }
+
+    onboardingSubmitInFlight.current = true
+    setAuthError('')
+    setOnboardingSubmitting(true)
+    try {
+      const existingBusinesses = profile.businessId
+        ? [await getBusiness(profile.businessId)].filter((item): item is Business => item !== null)
+        : []
+      const ownedBusinesses = existingBusinesses.length
+        ? existingBusinesses
+        : await getBusinessesForUser(currentUser.uid)
+      let createdBusiness = ownedBusinesses.find((item) => item.ownerId === currentUser.uid)
+      let businessLogoUrl = createdBusiness?.logoUrl || business?.logoUrl || ''
+
+      if (!createdBusiness && businessLogoFile) {
         const fileExt = (businessLogoFile.name.split('.').pop() || 'png').toLowerCase()
         const storagePath = `business-logos/${currentUser.uid}/${Date.now()}.${fileExt}`
         businessLogoUrl = await storageService.uploadFile(businessLogoFile, storagePath)
       }
 
-      const createdBusiness = await createBusiness({
-        ownerId: currentUser.uid,
-        name: businessName,
-        category,
-        address,
-        city,
-        state,
-        country: 'India',
-        currency,
-        logoUrl: businessLogoUrl || undefined,
-      })
-
-      if (firebaseDb) {
-        await setDoc(
-          doc(firebaseDb, 'users', currentUser.uid),
-          {
-            ...profile,
-            businessId: createdBusiness.id,
-            onboardingCompleted: true,
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true },
-        )
+      if (!createdBusiness) {
+        createdBusiness = await createBusiness({
+          ownerId: currentUser.uid,
+          name: businessName,
+          category,
+          address,
+          city,
+          state,
+          country: 'India',
+          currency,
+          logoUrl: businessLogoUrl || undefined,
+        })
+      } else if (businessLogoUrl && !createdBusiness.logoUrl) {
+        createdBusiness = { ...createdBusiness, logoUrl: businessLogoUrl }
       }
+
+      const updatedAt = new Date().toISOString()
+      await setDoc(
+        doc(firebaseDb, 'users', currentUser.uid),
+        {
+          ...profile,
+          businessId: createdBusiness.id,
+          onboardingCompleted: true,
+          updatedAt,
+        },
+        { merge: true },
+      )
+      updateProfile({
+        businessId: createdBusiness.id,
+        onboardingCompleted: true,
+        updatedAt,
+      })
 
       const nextBusiness = { ...createdBusiness, logoUrl: businessLogoUrl || undefined }
       setBusiness(nextBusiness)
@@ -749,7 +850,11 @@ function AppContent() {
       setBusinessLogoFile(null)
       setScreen('dashboard')
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Business onboarding failed.')
+      console.error('Business setup failed:', error)
+      setAuthError('Business setup failed. Check your connection and try again. Your information has not been cleared.')
+    } finally {
+      onboardingSubmitInFlight.current = false
+      setOnboardingSubmitting(false)
     }
   }
 
@@ -1011,6 +1116,22 @@ function AppContent() {
             />
           )}
 
+            {screen === 'forgotPassword' && (
+              <ForgotPasswordScreen
+                email={authForm.email}
+                submitting={submitting}
+                feedback={resetFeedback}
+                onEmailChange={(email) => handleAuthChange('email', email)}
+                onSubmit={handlePasswordResetSubmit}
+                onBackToLogin={() => {
+                  setResetFeedback(null)
+                  setAuthError('')
+                  setAuthMode('login')
+                  setScreen('login')
+                }}
+              />
+            )}
+
             {(screen === 'login' || screen === 'register') && (
               <AuthScreen
                 mode={screen}
@@ -1023,6 +1144,11 @@ function AppContent() {
                 }}
                 onFieldChange={handleAuthChange}
                 onSubmit={handleAuthSubmit}
+                onForgotPassword={() => {
+                  setResetFeedback(null)
+                  setAuthError('')
+                  setScreen('forgotPassword')
+                }}
               />
             )}
           </div>
@@ -1086,6 +1212,7 @@ function AppContent() {
           <OnboardingScreen
             onSubmit={handleOnboardingSubmit}
             error={authError}
+            submitting={onboardingSubmitting}
             businessLogoPreview={businessLogoPreview}
             onBusinessLogoChange={handleBusinessLogoChange}
             onCancel={handleLogout}
@@ -1408,94 +1535,31 @@ function DeveloperIntroScreen({
 }: {
   onSkip: () => void
 }) {
-  const introSlides = [
-    { title: 'Er. Manish Kumar Yadav', role: 'Software Engineer', description: 'Building modern fintech experiences that make business operations smarter, faster, and more reliable.', highlights: ['Finance', 'Business', 'Growth'] },
-    { title: 'KhataPro', role: 'Digital Business Management', description: 'Track customers, payments, balances, and business activity from a clean mobile dashboard that keeps your work organized.', highlights: ['Khata', 'Finance', 'Dashboard'] },
-    { title: 'Smart Ledger', role: 'Daily Control', description: 'Stay in control of receivables, dues, and billing records with a simple flow designed for real business use.', highlights: ['Records', 'Insights', 'Trust'] },
-    { title: 'Welcome to KhataPro', role: 'Let’s Begin', description: 'Your digital business management app is ready to help you run and grow your business with confidence.', highlights: ['Launch App', 'Manage Smartly', 'Grow Faster'] },
-  ]
-
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const isLastSlide = currentIndex === introSlides.length - 1
-
-  const handlePrimaryAction = () => {
-    if (isLastSlide) {
-      onSkip()
-      return
-    }
-
-    setCurrentIndex((prev) => prev + 1)
-  }
-
-  const activeSlide = introSlides[currentIndex]
-  const progressWidth = `${((currentIndex + 1) / introSlides.length) * 100}%`
-  const isFirstSlide = currentIndex === 0
-
   return (
     <div className="developer-intro-screen">
-      <div className={`developer-intro-card ${isFirstSlide ? 'developer-intro-card--first' : ''}`}>
+      <div className="developer-intro-card developer-intro-card--first">
         <div className="intro-progress-bar" aria-hidden="true">
-          <span style={{ width: progressWidth }} />
+          <span style={{ width: '100%' }} />
         </div>
 
-        {!isFirstSlide && <p className="developer-intro-kicker">Step {currentIndex + 1} / {introSlides.length}</p>}
-
-        <div className={`developer-profile-card ${isFirstSlide ? 'developer-profile-card--first developer-profile-card--solo' : ''}`}>
+        <div className="developer-profile-card developer-profile-card--first developer-profile-card--solo">
           <div className="developer-avatar-wrap">
             <img src={developerProfileImage} alt="Er. Manish Kumar Yadav" className="developer-profile-image" />
           </div>
 
-          {!isFirstSlide && <h2>{activeSlide.title}</h2>}
-
-          {!isFirstSlide && (
-            <div className="developer-role">
-              <span className="developer-role-icon">✓</span>
-              <span>{activeSlide.role}</span>
+          <div className="first-intro-hero">
+            <div className="developer-intro-brand-badge">KhataPro</div>
+            <p className="developer-intro-splash-copy">Digital Business Management</p>
+            <div className="first-intro-meta">
+              <span>Er. Manish Kumar Yadav</span>
+              <small>Software Engineer</small>
             </div>
-          )}
-
-          {!isFirstSlide && <p className="developer-tagline">{activeSlide.description}</p>}
-
-          {isFirstSlide && (
-            <div className="first-intro-hero">
-              <div className="developer-intro-brand-badge">KhataPro</div>
-              <p className="developer-intro-splash-copy">Digital Business Management</p>
-              <div className="first-intro-meta">
-                <span>Er. Manish Kumar Yadav</span>
-                <small>Software Engineer</small>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
 
-        {!isFirstSlide && (
-          <div className="feature-grid">
-            {activeSlide.highlights.map((item) => (
-              <span key={item} className="feature-pill">{item}</span>
-            ))}
-          </div>
-        )}
-
-        {!isFirstSlide && (
-          <div className="developer-branding">
-            <div className="developer-divider" />
-            <p className="developer-introducing">Introducing</p>
-            <h3>KhataPro</h3>
-            <p className="developer-subtitle">Digital Business Management</p>
-          </div>
-        )}
-
-        {!isFirstSlide && (
-          <div className="developer-intro-footer">
-            <span>© 2026 KhataPro</span>
-            <small>Developed by Manish Kumar</small>
-          </div>
-        )}
-
-        <div className="intro-actions">
-          <button type="button" className="text-link intro-skip" onClick={onSkip}>Skip</button>
-          <button type="button" className="primary-button intro-next-button" onClick={handlePrimaryAction}>
-            {isLastSlide ? 'Start KhataPro' : 'Next'}
+        <div className="intro-actions intro-actions--single">
+          <button type="button" className="primary-button intro-next-button" onClick={onSkip}>
+            Get Started
           </button>
         </div>
       </div>
@@ -1581,6 +1645,7 @@ function AuthScreen({
   onModeChange,
   onFieldChange,
   onSubmit,
+  onForgotPassword,
 }: {
   mode: 'login' | 'register'
   form: { name: string; email: string; phone: string; password: string; confirmPassword: string }
@@ -1589,8 +1654,11 @@ function AuthScreen({
   onModeChange: (mode: 'login' | 'register') => void
   onFieldChange: (field: keyof typeof form, value: string) => void
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>
+  onForgotPassword: () => void
 }) {
   const t = useTranslator()
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   return (
     <div className="screen auth-screen auth-screen-reference fade-up">
       <div className="auth-brand-row">
@@ -1634,6 +1702,8 @@ function AuthScreen({
               value={form.name}
               placeholder={t('e.g. Rahul Sharma')}
               onChange={(event) => onFieldChange('name', event.target.value)}
+              required
+              minLength={2}
             />
           </label>
         )}
@@ -1645,6 +1715,7 @@ function AuthScreen({
             value={form.email}
             placeholder="manish23@gmail.com"
             onChange={(event) => onFieldChange('email', event.target.value)}
+            required
           />
         </label>
 
@@ -1656,30 +1727,66 @@ function AuthScreen({
               value={form.phone}
               placeholder={t('Enter mobile number')}
               onChange={(event) => onFieldChange('phone', event.target.value)}
+              required
+              pattern="[0-9+() -]{7,20}"
             />
           </label>
         )}
 
         <label className="field">
           <span>{t('Password')}</span>
-          <input
-            type="password"
-            value={form.password}
-            placeholder={mode === 'login' ? '••••••' : t('Create password')}
-            onChange={(event) => onFieldChange('password', event.target.value)}
-          />
+          <span className="password-input-wrap">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={form.password}
+              placeholder={mode === 'login' ? '••••••' : t('Create password')}
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              onChange={(event) => onFieldChange('password', event.target.value)}
+              required
+              minLength={mode === 'register' ? 6 : undefined}
+            />
+            <button
+              type="button"
+              className="password-visibility-button"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword((visible) => !visible)}
+            >
+              {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+            </button>
+          </span>
         </label>
 
         {mode === 'register' && (
           <label className="field">
             <span>{t('Confirm password')}</span>
-            <input
-              type="password"
-              value={form.confirmPassword}
-              placeholder={t('Confirm password')}
-              onChange={(event) => onFieldChange('confirmPassword', event.target.value)}
-            />
+            <span className="password-input-wrap">
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={form.confirmPassword}
+                placeholder={t('Confirm password')}
+                autoComplete="new-password"
+                onChange={(event) => onFieldChange('confirmPassword', event.target.value)}
+                required
+                minLength={6}
+              />
+              <button
+                type="button"
+                className="password-visibility-button"
+                aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showConfirmPassword}
+                onClick={() => setShowConfirmPassword((visible) => !visible)}
+              >
+                {showConfirmPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
+            </span>
           </label>
+        )}
+
+        {mode === 'login' && (
+          <button type="button" className="forgot-password-link" onClick={onForgotPassword}>
+            {t('Forgot Password?')}
+          </button>
         )}
 
         {error && <div className="error-banner">{error}</div>}
@@ -1692,15 +1799,77 @@ function AuthScreen({
   )
 }
 
+function ForgotPasswordScreen({
+  email,
+  submitting,
+  feedback,
+  onEmailChange,
+  onSubmit,
+  onBackToLogin,
+}: {
+  email: string
+  submitting: boolean
+  feedback: { type: 'success' | 'error'; message: string } | null
+  onEmailChange: (email: string) => void
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
+  onBackToLogin: () => void
+}) {
+  const t = useTranslator()
+  return (
+    <div className="screen auth-screen auth-screen-reference fade-up">
+      <div className="auth-brand-row">
+        <div className="auth-brand-icon">
+          <div className="brand-mark small">
+            <div className="brand-book mini">
+              <span className="book-spine" />
+              <span className="book-pages" />
+            </div>
+          </div>
+        </div>
+        <span className="auth-brand-name">KhataPro</span>
+      </div>
+      <div className="auth-subtitle">{t('Account recovery')}</div>
+      <h3 className="auth-hero-heading">{t('Forgot Password?')}</h3>
+      <p className="forgot-password-copy">{t('Enter your account email and we will send a secure password reset link.')}</p>
+      <form className="auth-form" onSubmit={onSubmit}>
+        <label className="field">
+          <span>{t('Email address')}</span>
+          <input
+            type="email"
+            value={email}
+            placeholder="name@example.com"
+            autoComplete="email"
+            onChange={(event) => onEmailChange(event.target.value)}
+            required
+          />
+        </label>
+        {feedback && (
+          <div className={feedback.type === 'success' ? 'success-banner' : 'error-banner'} role="status">
+            {t(feedback.message)}
+          </div>
+        )}
+        <button type="submit" className="primary-button wide-button auth-submit-button" disabled={submitting}>
+          {submitting ? t('Please wait…') : t('Send Reset Link')}
+        </button>
+        <button type="button" className="forgot-password-link forgot-password-back" onClick={onBackToLogin}>
+          {t('Back to Login')}
+        </button>
+      </form>
+    </div>
+  )
+}
+
 function OnboardingScreen({
   onSubmit,
   error,
+  submitting,
   businessLogoPreview,
   onBusinessLogoChange,
   onCancel,
 }: {
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
   error: string
+  submitting: boolean
   businessLogoPreview: string
   onBusinessLogoChange: (event: React.ChangeEvent<HTMLInputElement>) => void
   onCancel: () => void
@@ -1722,7 +1891,7 @@ function OnboardingScreen({
       <form className="auth-form" onSubmit={onSubmit}>
         <label className="field">
           <span>{t('Business Name')}</span>
-          <input name="businessName" type="text" placeholder={t('Enter business name')} />
+          <input name="businessName" type="text" placeholder={t('Enter business name')} required minLength={2} maxLength={100} />
         </label>
 
         <label className="field">
@@ -1740,7 +1909,7 @@ function OnboardingScreen({
 
         <label className="field">
           <span>{t('Business Category')}</span>
-          <select name="category" defaultValue="Retail">
+          <select name="category" defaultValue="Retail" required>
             <option value="Retail">Retail</option>
             <option value="Wholesale">Wholesale</option>
             <option value="Services">Services</option>
@@ -1749,23 +1918,23 @@ function OnboardingScreen({
 
         <label className="field">
           <span>{t('Address')}</span>
-          <input name="address" type="text" placeholder={t('Enter address')} />
+          <input name="address" type="text" placeholder={t('Enter address')} required minLength={3} maxLength={200} />
         </label>
 
         <div className="multi-field">
           <label className="field">
             <span>{t('City')}</span>
-            <input name="city" type="text" placeholder={t('City')} />
+            <input name="city" type="text" placeholder={t('City')} required maxLength={100} />
           </label>
           <label className="field">
             <span>{t('State')}</span>
-            <input name="state" type="text" placeholder={t('State')} />
+            <input name="state" type="text" placeholder={t('State')} required maxLength={100} />
           </label>
         </div>
 
         <label className="field">
           <span>{t('Currency')}</span>
-          <select name="currency" defaultValue="INR">
+          <select name="currency" defaultValue="INR" required>
             <option value="INR">₹ INR</option>
             <option value="USD">$ USD</option>
           </select>
@@ -1775,7 +1944,9 @@ function OnboardingScreen({
 
         <div className="form-actions">
           <button type="button" className="secondary-button" onClick={onCancel}>{t('Cancel')}</button>
-          <button type="submit" className="primary-button">{t('Continue')}</button>
+          <button type="submit" className="primary-button" disabled={submitting}>
+            {submitting ? t('Please wait…') : t('Continue')}
+          </button>
         </div>
       </form>
     </div>

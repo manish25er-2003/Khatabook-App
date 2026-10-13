@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -16,6 +17,7 @@ interface AuthContextType {
   profile: UserProfile | null
   loading: boolean
   isAuthenticated: boolean
+  updateProfile: (updates: Partial<UserProfile>) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -24,6 +26,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const updateProfile = useCallback((updates: Partial<UserProfile>) => {
+    setProfile((currentProfile) => currentProfile ? { ...currentProfile, ...updates } : currentProfile)
+  }, [])
 
   useEffect(() => {
     if (!firebaseAuth || !firebaseDb) {
@@ -33,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
+    const database = firebaseDb
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
       setCurrentUser(user)
 
@@ -43,7 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const profileRef = doc(firebaseDb, 'users', user.uid)
+        const profileRef = doc(database, 'users', user.uid)
         const profileSnap = await getDoc(profileRef)
         setProfile(profileSnap.exists() ? ({ id: user.uid, ...(profileSnap.data() as UserProfile) } as UserProfile) : null)
       } catch (error) {
@@ -63,8 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile,
       loading,
       isAuthenticated: Boolean(currentUser),
+      updateProfile,
     }),
-    [currentUser, profile, loading],
+    [currentUser, profile, loading, updateProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
