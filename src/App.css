@@ -3743,19 +3743,268 @@ button {
         min-height: 100vh;
         padding-top: 24px;
         padding-bottom: 24px;
+        background: radial-gradient(circle at top, rgba(22, 160, 133, 0.08), transparent 24%), linear-gradient(180deg, #f7faf8 0%, #edf9f4 100%);
+    }
+    .app-shell-main {
+        max-width: 1360px;
+        padding: 24px 16px 80px;
     }
     .desktop-sidebar {
         display: flex;
+        width: 260px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(240, 249, 245, 0.96));
+        border: 1px solid rgba(15, 118, 94, 0.1);
+        border-radius: 28px;
+        padding: 18px 14px;
+        box-shadow: 0 28px 55px rgba(13, 43, 38, 0.08);
+    }
+    .sidebar-brand {
+        padding: 4px 6px;
+        font-size: 1.02rem;
+    }
+    .nav-item {
+        border-radius: 14px;
+        padding: 12px 12px;
+        font-size: 0.92rem;
+    }
+    .nav-item:hover {
+        background: rgba(22, 160, 133, 0.05);
     }
     .content-panel {
-        background: rgba(255, 255, 255, 0.55);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(246, 251, 248, 0.9));
         border: 1px solid rgba(16, 185, 129, 0.08);
-        border-radius: 24px;
-        padding: 18px 18px 24px;
-        box-shadow: 0 20px 40px rgba(8, 32, 30, 0.04);
+        border-radius: 28px;
+        padding: 22px 22px 28px;
+        box-shadow: 0 24px 52px rgba(8, 32, 30, 0.06);
+    }
+    .screen {
+        min-height: 660px;
+        border-radius: 26px;
+        padding: 22px 20px 18px;
     }
     .mobile-bottom-nav {
         display: none;
+    }
+    .auth-shell {
+        padding: 36px 18px 42px;
+    }
+    .auth-card {
+        width: min(100%, 960px);
+    }
+    .auth-screen-reference {
+        padding: 28px 28px 24px;
+        border-radius: 28px;
+        box-shadow: 0 26px 60px rgba(12, 26, 22, 0.08);
+    }
+    .auth-screen-reference .auth-form {
+        max-width: 560px;
+    }
+    .auth-brand-name {
+        font-size: 2rem;
+    }
+    .auth-hero-heading {
+        font-size: clamp(2.5rem, 3.6vw, 4rem);
+    }
+    .auth-toggle {
+        max-width: 360px;
+    }
+    .dashboard-screen {
+        padding: 12px 8px 10px;
+        border: 1px solid rgba(16, 185, 129, 0.08);
+        background: linear-gradient(180deg, #f9fefb 0%, #f3faf7 100%);
+    }
+    .dashboard-header {
+        margin-bottom: 20px;
+        padding: 6px 4px 0;
+    }
+    .brand-text {
+        font-size: 1.28rem;
+    }
+    .dashboard-greeting {
+        margin: 4px 0 18px;
+    }
+    .dashboard-greeting h3 {
+        font-size: 2rem;
+    }
+    .summary-grid {
+        gap: 16px;
+        margin: 18px 0 18px;
+    }
+    .metric-card {
+        min-height: 148px;
+        padding: 18px 18px 16px;
+    }
+    .metric-card strong {
+        font-size: clamp(1.7rem, 2vw, 2.3rem);
+    }
+    .mini-stat-grid {
+        gap: 12px;
+        margin-top: 14px;
+    }
+    .mini-stat-card {
+        padding: 14px 14px 12px;
+    }
+    .quick-actions-grid {
+        gap: 12px;
+        margin-top: 18px;
+    }
+    .quick-action {
+        min-height: 104px;
+        border-radius: 20px;
+        font-size: 0.78rem;
+    }
+    .customer-preview-row,
+    .txn-item {
+        padding: 12px 12px;
+        border-radius: 16px;
+    }
+    .section-header {
+        margin-top: 20px;
+    }
+    .section-header h4 {
+        font-size: 1.02rem;
+    }
+
+    .khata-screen,
+    .customers-screen,
+    .add-form-screen,
+    .transaction-form-screen,
+    .placeholder-screen,
+    .loan-screen,
+    .loan-detail-screen,
+    .loan-application-screen,
+    .profile-screen,
+    .payment-success-screen {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 18px 18px 20px;
+        border-radius: 26px;
+        border: 1px solid rgba(16, 185, 129, 0.08);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(243, 251, 246, 0.92));
+        box-shadow: 0 22px 46px rgba(12, 44, 38, 0.05);
+    }
+
+    .khata-top,
+    .panel-header,
+    .transaction-header,
+    .loan-header {
+        padding: 2px 2px 0;
+    }
+
+    .customer-profile h3,
+    .panel-header h3,
+    .transaction-header h3,
+    .loan-header h3,
+    .loan-application-screen h3,
+    .profile-screen h3 {
+        font-size: 1.32rem;
+    }
+
+    .balance-card-highlight {
+        padding: 18px 18px 16px;
+        border-radius: 22px;
+        margin-top: 20px;
+    }
+
+    .balance-card-highlight strong {
+        font-size: 2.5rem;
+    }
+
+    .payment-request-card {
+        padding: 18px 18px 16px;
+        border-radius: 22px;
+        margin-top: 20px;
+    }
+
+    .payment-request-amount {
+        font-size: 2.4rem;
+    }
+
+    .payment-input-field input,
+    .field input,
+    .field textarea,
+    .field select {
+        min-height: 50px;
+        padding-left: 14px;
+        padding-right: 14px;
+        border-radius: 14px;
+    }
+
+    .auth-form,
+    .profile-form,
+    .transaction-form,
+    .loan-form {
+        max-width: 620px;
+        margin: 16px auto 0;
+    }
+
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 18px;
+    }
+
+    .primary-button,
+    .secondary-button,
+    .success-primary-button,
+    .action-pill,
+    .quick-action {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .primary-button:hover,
+    .secondary-button:hover,
+    .success-primary-button:hover,
+    .action-pill:hover,
+    .quick-action:hover {
+        transform: translateY(-1px);
+    }
+
+    .transaction-timeline,
+    .customer-list,
+    .history-list,
+    .loan-list,
+    .report-grid {
+        gap: 12px;
+    }
+
+    .history-item,
+    .customer-row,
+    .loan-item,
+    .report-card,
+    .txn-item {
+        border-radius: 16px;
+        padding: 12px 12px;
+    }
+
+    .profile-card {
+        max-width: 520px;
+        margin: 8px auto 18px;
+        border-radius: 24px;
+        padding: 22px 18px;
+    }
+
+    .profile-avatar-upload img {
+        width: 96px;
+        height: 96px;
+    }
+
+    .payment-success-modal {
+        width: min(92vw, 380px);
+        padding: 30px 24px 22px;
+    }
+
+    .payment-success-modal h4 {
+        font-size: 2.2rem;
+    }
+
+    .placeholder-card,
+    .empty-card,
+    .stats-shell,
+    .report-card,
+    .loan-summary-card {
+        border-radius: 20px;
     }
 }
 
